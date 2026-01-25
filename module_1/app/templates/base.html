@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title if title else "Module 1" }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <nav class="navbar">
+      <a class="nav-item {{ 'active' if active=='home' else '' }}" href="{{ url_for('pages.home') }}">Home</a>
+      <a class="nav-item {{ 'active' if active=='contact' else '' }}" href="{{ url_for('pages.contact') }}">Contact</a>
+      <a class="nav-item {{ 'active' if active=='projects' else '' }}" href="{{ url_for('pages.projects') }}">Projects</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

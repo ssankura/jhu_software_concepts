@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% set title = "Home" %}
+
+{% block content %}
+  <h1 class="page-title">Sireesha Sankuratripati</h1>
+  <p class="subtitle">Position: Software Engineer, MS Student at JHU</p>
+
+  <section class="two-col">
+    <div class="bio">
+      <h2>Bio</h2>
+      <p>
+        I am a software engineering professional with experience designing and leading
+        large-scale software systems. I am currently focused on strengthening my foundations
+        in software concepts, backend development, and web frameworks. I enjoy building
+        practical applications, learning new technologies, and applying structured
+        engineering practices to real-world problems.
+      </p>
+    </div>
+
+    <div class="photo">
+      <img src="{{ url_for('static', filename='img/profile.jpg') }}" alt="Profile photo">
+    </div>
+  </section>
+{% endblock %}
