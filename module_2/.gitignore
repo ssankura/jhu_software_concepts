@@ -1,0 +1,24 @@
+# Python bytecode (saves space)
+__pycache__/
+*.py[cod]
+
+# Virtual Environments (don't upload your local installation)
+venv/
+.venv/
+env/
+
+# Sensitive Information (API keys or local configs)
+.env
+secrets.json
+
+# Large Data & Models (GitHub has a 100MB limit)
+*.gguf
+models/
+applicant_data.json
+standardized_output.json
+
+# Ignore the LLM processing environment and models (provided by instructor)
+llm_hosting/
+
+# System Files
+.DS_Store
