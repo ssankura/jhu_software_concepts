@@ -197,7 +197,6 @@ def main():
                         llm_generated_university ILIKE '%Johns Hopkins%'
                      OR llm_generated_university ILIKE '%JHU%'
                      OR llm_generated_university ILIKE '%John%Hopkins%' );
-                      );
                 """
             )
 
