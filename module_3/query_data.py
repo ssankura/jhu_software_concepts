@@ -1,102 +1,150 @@
 """
 query_data.py
 
-Purpose:
----------
-Executes SQL analytics queries on the GradCafe PostgreSQL database
-to answer all Module 3 assignment questions.
+Module 3 - Querying PostgreSQL (GradCafe dataset)
 
-This script:
-- Connects to PostgreSQL using DATABASE_URL
-- Executes required analytical SQL queries
-- Prints results in readable console format
+This script connects to a PostgreSQL database (using DATABASE_URL),
+runs the required SQL analysis queries, prints results to the console,
+and includes two custom analysis questions.
 
-Requirements:
--------------
-- PostgreSQL database populated with applicant data
-- DATABASE_URL environment variable must be configured
-
-Run:
-----
-python query_data.py
+How to run:
+-----------
+export DATABASE_URL="postgresql://graduser:grad123@localhost:5432/gradcafe"
+python3 query_data.py
 """
 
 import os
+from decimal import Decimal
+
 import psycopg
 
 
 def get_connection():
     """
-    Establish database connection using DATABASE_URL environment variable.
+    Create and return a psycopg connection using DATABASE_URL.
 
     Returns:
-        psycopg.Connection object
+        psycopg.Connection: An open database connection.
+
+    Raises:
+        ValueError: If DATABASE_URL environment variable is not set.
     """
-
     db_url = os.environ.get("DATABASE_URL")
-
     if not db_url:
-        raise ValueError("DATABASE_URL environment variable is not set.")
-
+        raise ValueError(
+            "DATABASE_URL environment variable is not set.\n"
+            "Example:\n"
+            'export DATABASE_URL="postgresql://graduser:grad123@localhost:5432/gradcafe"'
+        )
     return psycopg.connect(db_url)
 
 
-def run_query(cursor, question, sql):
+def _clean_value(value):
     """
-    Executes a SQL query and prints results.
+    Convert Decimal values to float for cleaner console output.
 
     Args:
-        cursor: PostgreSQL cursor object
-        question: Description of query being executed
-        sql: SQL query string
+        value: Any value returned from PostgreSQL
+
+    Returns:
+        float | original value
     """
+    if isinstance(value, Decimal):
+        return float(value)
+    return value
 
-    print("\n" + "=" * 70)
-    print(question)
-    print("=" * 70)
 
+from decimal import Decimal
+
+def run_query(cursor, title, sql, multi=False, label=None, multi_labels=None):
+    """
+    Executes SQL and prints in a screenshot-style output.
+
+    Args:
+        cursor: psycopg cursor
+        title: question title (can be printed or ignored)
+        sql: SQL query string
+        multi: True if query returns multiple rows
+        label: label for single-value outputs (e.g., "Applicant count")
+        multi_labels: labels for multi-column single-row outputs (e.g., averages)
+    """
     cursor.execute(sql)
-    results = cursor.fetchall()
 
-    for row in results:
-        print(row)
+    # -------------------- Multi-row results --------------------
+    if multi:
+        rows = cursor.fetchall()
+        print("")  # spacing line (like screenshot)
+        for row in rows:
+            cleaned = []
+            for v in row:
+                if isinstance(v, Decimal):
+                    v = float(v)
+                cleaned.append(v)
+            print(*cleaned)
+        return
 
+    # -------------------- Single-row results --------------------
+    row = cursor.fetchone()
+    if row is None:
+        print("No results")
+        return
+
+    cleaned = []
+    for v in row:
+        if isinstance(v, Decimal):
+            v = float(v)
+        cleaned.append(v)
+
+    # Single value
+    if len(cleaned) == 1:
+        value = cleaned[0]
+        if label:
+            print(f"{label}: {value}")
+        else:
+            print(value)
+        return
+
+    # Multi-value (like averages)
+    if multi_labels and len(multi_labels) == len(cleaned):
+        parts = []
+        for lab, val in zip(multi_labels, cleaned):
+            parts.append(f"{lab}: {val}")
+        print(", ".join(parts))
+    else:
+        print(*cleaned)
 
 def main():
     """
     Main execution function.
 
-    Runs all required Module 3 SQL analytical queries.
+    Runs all required Module 3 SQL analytical queries and prints
+    answers in formatted console output.
     """
 
     with get_connection() as conn:
         with conn.cursor() as cursor:
 
             # ----------------------------------------------------------
-            # Q1: Count number of applicants applying for Fall 2026
+            # Q1
             # ----------------------------------------------------------
-            # This query counts all applicant entries where the
-            # program start term is Fall 2026.
             run_query(
                 cursor,
-                "Q1: Number of Fall 2026 applicants",
-                """
-                SELECT COUNT(*)
-                FROM applicants
-                WHERE term = 'Fall 2026';
-                """
+                title="Q1: Number of Fall 2026 applicants",
+                sql="""
+                    SELECT COUNT(*)
+                    FROM applicants
+                    WHERE term = 'Fall 2026';
+                    """,
+                label="Applicant count"
             )
 
             # ----------------------------------------------------------
-            # Q2: Percentage of International Applicants
+            # Q2
             # ----------------------------------------------------------
-            # This query calculates the percentage of applicants who
-            # identified as International students among all entries
-            # with known citizenship information.
             run_query(
                 cursor,
-                "Q2: Percentage of International Applicants",
-                """
+                title="Q2: Percentage of International Applicants",
+                sql="""
                 SELECT
                   ROUND(
                     100.0 * SUM(CASE WHEN us_or_international = 'International' THEN 1 ELSE 0 END)
@@ -105,52 +153,55 @@ def main():
                   )
                 FROM applicants
                 WHERE us_or_international IS NOT NULL;
-                """
+                """,
+                label="Percent International"
             )
 
             # ----------------------------------------------------------
-            # Q3: Average GPA, GRE Quantitative, GRE Verbal, GRE AW
+            # Q3
             # ----------------------------------------------------------
-            # Calculates average standardized metrics for applicants
-            # who provided GPA and GRE score information.
             run_query(
                 cursor,
-                "Q3: Average GPA, GRE, GRE V, GRE AW",
-                """
+                title="Q3: Average GPA, GRE, GRE V, GRE AW",
+                sql="""
                 SELECT
                   ROUND(AVG(gpa)::numeric, 3),
                   ROUND(AVG(gre)::numeric, 3),
                   ROUND(AVG(gre_v)::numeric, 3),
                   ROUND(AVG(gre_aw)::numeric, 3)
                 FROM applicants;
-                """
+                """,
+                multi_labels=[
+                    "Average GPA",
+                    "Average GRE",
+                    "Average GRE V",
+                    "Average GRE AW"
+                ]
             )
 
             # ----------------------------------------------------------
-            # Q4: Average GPA of American Applicants in Fall 2026
+            # Q4
             # ----------------------------------------------------------
-            # Filters applicants who identified as American and
-            # applied for Fall 2026 programs.
             run_query(
                 cursor,
-                "Q4: Avg GPA of American Students (Fall 2026)",
-                """
+                title="Q4: Avg GPA of American Students (Fall 2026)",
+                sql="""
                 SELECT ROUND(AVG(gpa)::numeric, 3)
                 FROM applicants
                 WHERE term = 'Fall 2026'
                   AND us_or_international = 'American'
                   AND gpa IS NOT NULL;
-                """
+                """,
+                label="Average GPA American"
             )
 
             # ----------------------------------------------------------
-            # Q5: Acceptance Percentage for Fall 2025 Applicants
+            # Q5
             # ----------------------------------------------------------
-            # Calculates acceptance rate for Fall 2025 admission cycle.
             run_query(
                 cursor,
-                "Q5: Acceptance % Fall 2025",
-                """
+                title="Q5: Acceptance % Fall 2025",
+                sql="""
                 SELECT
                   ROUND(
                     100.0 * SUM(CASE WHEN status = 'Accepted' THEN 1 ELSE 0 END)
@@ -159,36 +210,33 @@ def main():
                   )
                 FROM applicants
                 WHERE term = 'Fall 2025';
-                """
+                """,
+                label="Acceptance percent"
             )
 
             # ----------------------------------------------------------
-            # Q6: Average GPA of Accepted Applicants in Fall 2026
+            # Q6
             # ----------------------------------------------------------
-            # Calculates GPA average for applicants who were accepted
-            # into Fall 2026 programs.
             run_query(
                 cursor,
-                "Q6: Avg GPA of Accepted Applicants (Fall 2026)",
-                """
+                title="Q6: Avg GPA of Accepted Applicants (Fall 2026)",
+                sql="""
                 SELECT ROUND(AVG(gpa)::numeric, 3)
                 FROM applicants
                 WHERE term = 'Fall 2026'
                   AND status = 'Accepted'
                   AND gpa IS NOT NULL;
-                """
+                """,
+                label="Average GPA Acceptance"
             )
 
             # ----------------------------------------------------------
-            # Q7: Count JHU Masters Computer Science Applicants
+            # Q7
             # ----------------------------------------------------------
-            # Uses LLM-generated university and program fields to
-            # accurately identify applicants to Johns Hopkins University
-            # Masters Computer Science programs.
             run_query(
                 cursor,
-                "Q7: JHU Masters Computer Science Applicants",
-                """
+                title="Q7: JHU Masters Computer Science Applicants",
+                sql="""
                 SELECT COUNT(*)
                 FROM applicants
                 WHERE degree ILIKE 'Master%'
@@ -196,19 +244,19 @@ def main():
                   AND (
                         llm_generated_university ILIKE '%Johns Hopkins%'
                      OR llm_generated_university ILIKE '%JHU%'
-                     OR llm_generated_university ILIKE '%John%Hopkins%' );
-                """
+                     OR llm_generated_university ILIKE '%John%Hopkins%'
+                  );
+                """,
+                label="JHU Masters Computer Science count"
             )
 
             # ----------------------------------------------------------
-            # Q8: Accepted PhD CS Applicants at Top Universities (2026)
+            # Q8
             # ----------------------------------------------------------
-            # Identifies accepted PhD Computer Science applicants in 2026
-            # at Georgetown, MIT, Stanford, and Carnegie Mellon.
             run_query(
                 cursor,
-                "Q8: 2026 Accepted PhD CS Applicants at Top Universities",
-                """
+                title="Q8: 2026 Accepted PhD CS Applicants at Top Universities",
+                sql="""
                 SELECT COUNT(*)
                 FROM applicants
                 WHERE term ILIKE '%2026%'
@@ -222,19 +270,18 @@ def main():
                      OR llm_generated_university ILIKE '%Stanford%'
                      OR llm_generated_university ILIKE '%Carnegie Mellon%'
                      OR llm_generated_university ILIKE '%CMU%'
-                      );
-                """
+                  );
+                """,
+                label="Accepted PhD CS count"
             )
 
             # ----------------------------------------------------------
-            # Q9: Compare Q8 Using Raw Scraped Program Fields
+            # Q9
             # ----------------------------------------------------------
-            # Demonstrates difference between raw scraped text data
-            # and standardized LLM-generated fields.
             run_query(
                 cursor,
-                "Q9: Same as Q8 Using Raw Downloaded Fields",
-                """
+                title="Q9: Same as Q8 Using Raw Downloaded Fields",
+                sql="""
                 SELECT COUNT(*)
                 FROM applicants
                 WHERE term ILIKE '%2026%'
@@ -248,38 +295,41 @@ def main():
                      OR program ILIKE '%Stanford%'
                      OR program ILIKE '%Carnegie Mellon%'
                      OR program ILIKE '%CMU%'
-                      );
-                """
+                  );
+                """,
+                label="Raw field accepted count"
             )
 
             # ----------------------------------------------------------
-            # Custom Q10A: Top 5 Most Applied Programs (Fall 2026)
+            # Custom Q10A
             # ----------------------------------------------------------
             run_query(
                 cursor,
-                "Custom Q10A: Top 5 Programs (Fall 2026)",
-                """
+                title="Custom Q10A: Top 5 Programs (Fall 2026)",
+                sql="""
                 SELECT program, COUNT(*)
                 FROM applicants
                 WHERE term = 'Fall 2026'
                 GROUP BY program
                 ORDER BY COUNT(*) DESC
                 LIMIT 5;
-                """
+                """,
+                multi=True
             )
 
             # ----------------------------------------------------------
-            # Custom Q10B: Average GPA of International Applicants
+            # Custom Q10B
             # ----------------------------------------------------------
             run_query(
                 cursor,
-                "Custom Q10B: Avg GPA of International Applicants",
-                """
+                title="Custom Q10B: Avg GPA of International Applicants",
+                sql="""
                 SELECT ROUND(AVG(gpa)::numeric, 3)
                 FROM applicants
                 WHERE us_or_international = 'International'
                   AND gpa IS NOT NULL;
-                """
+                """,
+                label="Average GPA International"
             )
 
 
