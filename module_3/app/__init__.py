@@ -38,6 +38,8 @@ def create_app() -> Flask:
         template_folder=str(base_dir / "templates"),
         static_folder=str(base_dir / "static"),
     )
+    app.secret_key = "jhu_module3_secret_key"
+
 
     # Register Blueprints
     from app.pages import pages_bp

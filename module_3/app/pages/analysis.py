@@ -10,6 +10,12 @@ Responsibilities:
 • Retrieve analytics data from PostgreSQL
 • Pass results to HTML templates
 """
+import subprocess
+import sys
+from pathlib import Path
+from flask import redirect, url_for, flash
+
+from app.pages.pull_state import is_running, start, stop
 
 from decimal import Decimal
 from flask import render_template
@@ -19,6 +25,7 @@ from app.pages import pages_bp
 
 # Import database helper functions
 from app.db import fetch_one, fetch_all
+
 
 
 def _convert_decimal(value):
@@ -225,4 +232,67 @@ def analysis():
     }
 
     # Render HTML template with results
-    return render_template("analysis.html", results=results)
+    return render_template(
+        "analysis.html",
+        results=results,
+        pull_running=is_running()
+    )
+
+@pages_bp.post("/pull-data")
+def pull_data():
+    if is_running():
+        flash("Pull Data is currently running. Please wait.", "warning")
+        return redirect(url_for("pages.analysis"))
+
+    try:
+        module_3_dir = Path(__file__).resolve().parents[2]
+        pull_script = module_3_dir / "pull_data.py"
+
+        log_file = module_3_dir / "pull_data.log"
+        log = open(log_file, "a")
+
+        subprocess.Popen(
+            [sys.executable, str(pull_script)],
+            cwd=str(module_3_dir),
+            stdout=log,
+            stderr=log,
+        )
+
+        flash("Pull Data started.", "info")
+
+    except Exception as e:
+        flash(f"Pull Data failed: {e}", "danger")
+
+    return redirect(url_for("pages.analysis"))
+
+
+@pages_bp.post("/update-analysis")
+def update_analysis():
+    # (Optional) keep this check if you still want to block while pull-data runs
+    if is_running():
+        flash("Pull Data is running. Update Analysis is disabled until scraping completes.", "warning")
+        return redirect(url_for("pages.analysis"))
+
+    try:
+        module_3_dir = Path(__file__).resolve().parents[2]  # module_3/
+
+        # choose what to run for "Update Analysis"
+        analysis_script = module_3_dir / "query_data.py"    # <-- change if needed
+
+        log_file = module_3_dir / "pull_data.log"
+        log = open(log_file, "a", buffering=1)  # line-buffered
+
+        subprocess.Popen(
+            [sys.executable, str(analysis_script)],
+            cwd=str(module_3_dir),
+            stdout=log,
+            stderr=log,
+        )
+
+        flash("Update Analysis started. Writing logs to pull_data.log.", "info")
+
+    except Exception as e:
+        flash(f"Update Analysis failed to start: {e}", "danger")
+
+    return redirect(url_for("pages.analysis"))
+
