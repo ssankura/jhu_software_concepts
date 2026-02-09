@@ -129,52 +129,6 @@ To improve clarity and simplify execution paths, the Module 2 codebase was reorg
 
 ---
 
-## Module 2 Known Limitations
-
-GradCafe’s server behavior occasionally returns repeated survey pages when accessed programmatically. This causes Module 2 scraping to sometimes stop early or fail to retrieve the full dataset reliably.
-
-However:
-
-* Module 2 scraping logic successfully retrieves data in limited scenarios
-* Module 3 database loading, SQL analysis, and Flask functionality operate correctly
-* Module 3 supports loading instructor-provided datasets as well as scraper-generated datasets
-
----
-
-## Technologies Used
-
-* Python 3.14
-* Flask
-* PostgreSQL
-* psycopg
-* HTML / CSS
-* JSON
-* urllib (standard library web requests)
-* BeautifulSoup (Module 2 parsing only)
-
----
-
-## Database Schema
-
-The PostgreSQL database contains a single table named `applicants` with the following fields:
-
-* Program
-* Comments
-* Date Added
-* URL
-* Status
-* Term
-* Citizenship Status
-* GPA
-* GRE Quantitative
-* GRE Verbal
-* GRE Analytical Writing
-* Degree
-* LLM Generated Program
-* LLM Generated University
-
----
-
 ## Installation Instructions
 
 ### 1. Create Virtual Environment
@@ -234,12 +188,96 @@ http://127.0.0.1:5000
 
 ---
 
+## Technologies Used
+
+* Python 3.14
+* Flask
+* PostgreSQL
+* psycopg
+* HTML / CSS
+* JSON
+* urllib (standard library web requests)
+* BeautifulSoup (Module 2 parsing only)
+
+---
+
+## Database Schema
+
+The PostgreSQL database contains a single table named `applicants` with the following fields:
+
+* Program
+* Comments
+* Date Added
+* URL
+* Status
+* Term
+* Citizenship Status
+* GPA
+* GRE Quantitative
+* GRE Verbal
+* GRE Analytical Writing
+* Degree
+* LLM Generated Program
+* LLM Generated University
+
+---
+
 ## Known Limitations
 
-* GradCafe pagination occasionally returns repeated pages, which may limit scraper dataset size
-* Pull Data functionality depends on GradCafe server response consistency
-* If the scraper is interrupted unexpectedly, the lock file may persist and must be manually removed
-* Web scraping relies on publicly available user-submitted data, which may contain inaccuracies
+### Pull Data Status Updates
+
+The Pull Data operation is executed through a subprocess triggered by the Flask application. While a lock file prevents multiple simultaneous runs, the webpage does not currently implement asynchronous background status polling. As a result:
+
+* Status messages do not automatically refresh when the Pull Data job completes.
+* Users must manually refresh or click **Update Analysis** to view updated results.
+
+---
+
+### Button State Behavior
+
+The Pull Data and Update Analysis buttons are designed to disable when scraping is in progress using a file-based locking mechanism. However:
+
+* In many cases, the scraper terminates quickly because GradCafe returns repeated survey pages.
+* Since the job completes rapidly, users may not observe the buttons remaining disabled for an extended period.
+
+---
+
+### Module 2 Scraper Reliability
+
+Module 2 scraping logic was enhanced to meet assignment requirements, including:
+
+* Migration from `urllib3` to `urllib`
+* Improved parsing and field extraction
+* Pagination protection logic
+* Deduplication safeguards
+
+Despite these improvements, GradCafe occasionally returns repeated survey pages when accessed programmatically. This causes:
+
+* Scraper runs to terminate early
+* Inconsistent dataset expansion
+* Reduced ability to reliably collect large datasets directly from the website
+
+---
+
+### Impact on Module 3
+
+Module 3 functionality is not affected by these scraper limitations because:
+
+* The database was successfully populated using instructor-provided data
+* All SQL queries and Flask analytics operate correctly using verified datasets
+* Pull Data functionality remains operational when valid new data is available
+
+---
+
+### Scraping Data Accuracy
+
+GradCafe data is:
+
+* User-submitted
+* Anonymous
+* Not formally validated
+
+Therefore, entries may contain incomplete, inconsistent, or inaccurate information.
 
 ---
 
