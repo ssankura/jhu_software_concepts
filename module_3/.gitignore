@@ -24,8 +24,5 @@ __pycache__/
 # Temporary files
 *.tmp
 
-#Queries for Canvas submission
-SQL_Queries_Module3.pdf
-
 #tmp lock file
 .pull_data.lock
