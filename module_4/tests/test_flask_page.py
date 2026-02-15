@@ -14,7 +14,7 @@ Marked with @pytest.mark.web per assignment policy.
 """
 
 import pytest
-
+from bs4 import BeautifulSoup
 
 # ============================================================================
 # Test: Required Routes Exist
@@ -62,28 +62,24 @@ def test_create_app_has_required_routes(app):
 #   but string presence satisfies assignment requirements.
 # ============================================================================
 
+
+
+
 @pytest.mark.web
 def test_get_analysis_renders_required_components(client):
-
-    # Request analysis page
     resp = client.get("/analysis")
-
-    # Page must load successfully
     assert resp.status_code == 200
 
-    html = resp.data.decode("utf-8")
+    soup = BeautifulSoup(resp.data, "html.parser")
+    text = soup.get_text(" ", strip=True)
 
-    # ------------------------------------------------------------------------
     # Required page text
-    # ------------------------------------------------------------------------
-    assert "Analysis" in html
-    assert "Answer:" in html
+    assert "Analysis" in text
+    assert "Answer:" in text
 
-    # ------------------------------------------------------------------------
-    # Required stable selectors
-    #
-    # data-testid attributes are required by assignment
-    # to ensure UI tests are stable and not brittle.
-    # ------------------------------------------------------------------------
-    assert 'data-testid="pull-data-btn"' in html
-    assert 'data-testid="update-analysis-btn"' in html
+    # Required buttons (stable selectors)
+    pull_btn = soup.select_one('[data-testid="pull-data-btn"]')
+    assert pull_btn is not None
+
+    update_btn = soup.select_one('[data-testid="update-analysis-btn"]')
+    assert update_btn is not None

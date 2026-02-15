@@ -15,6 +15,7 @@ These tests satisfy Module 4 requirements under:
 
 import re
 import pytest
+from bs4 import BeautifulSoup
 
 
 # ============================================================================
@@ -73,26 +74,16 @@ def test_page_includes_answer_labels(client):
 # This test ensures UI reflects that formatting rule.
 # ============================================================================
 
+
+
 @pytest.mark.analysis
 def test_percentages_render_with_two_decimals(client):
     resp = client.get("/analysis")
-
-    # Page must load successfully
     assert resp.status_code == 200
 
-    html = resp.data.decode("utf-8")
+    soup = BeautifulSoup(resp.data, "html.parser")
+    text = soup.get_text(" ", strip=True)
 
-    # Debug print (optional; useful during development)
-    # Prints snippet around percent field
-    print(
-        html[
-            html.find("Percent International"):
-            html.find("Percent International") + 200
-        ]
-    )
+    # Look for at least one percentage like 39.28%
+    assert re.search(r"\d+\.\d{2}%", text), f"No two-decimal percent found in: {text}"
 
-    # Must contain at least one properly formatted percentage
-    # Example match: 12.34%
-    assert PCT_RE.search(html), (
-        "Expected a percentage formatted with two decimals (e.g., 39.28%)"
-    )
