@@ -239,6 +239,33 @@ pip install -r requirements.txt
 
 ---
 
+## 📚 Sphinx Documentation
+
+Full project documentation generated using Sphinx is available here:
+
+https://github.com/ssankura/jhu_software_concepts/blob/main/module_4/docs/build/html
+
+The documentation includes:
+
+• Overview & Setup instructions (environment variables, running app & tests)  
+• Architecture description (Web / ETL / Database layers)  
+• API Reference generated using autodoc  
+• Testing Guide (markers, fixtures, selectors)  
+• Operational Notes (busy-state policy, idempotency strategy)  
+• Troubleshooting guide  
+
+The documentation was generated using:
+
+    cd module_4/docs
+    make clean
+    make html
+
+Generated HTML files are located under:
+
+    module_4/docs/build/html/
+
+---
+
 ## Final Status
 
 - All routes working
