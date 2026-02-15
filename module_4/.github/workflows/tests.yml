@@ -1,0 +1,55 @@
+name: Module 4 CI
+
+on:
+  push:
+    paths:
+      - "module_4/**"
+      - ".github/workflows/module4-ci.yml"
+  pull_request:
+    paths:
+      - "module_4/**"
+      - ".github/workflows/module4-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: graduser
+          POSTGRES_PASSWORD: grad123
+          POSTGRES_DB: gradcafe
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U graduser -d gradcafe"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DATABASE_URL: postgresql://graduser:grad123@localhost:5432/gradcafe
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: src
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: module_4
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests (required markers)
+        working-directory: module_4
+        run: |
+          pytest -q -m "web or buttons or analysis or db or integration"
