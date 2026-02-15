@@ -354,7 +354,8 @@ def pull_data():
             flash("Pull Data failed. Check logs.", "danger")
         return redirect(url_for("pages.analysis"))
 
-    return jsonify(result), 200
+    status = 200 if result.get("ok") else 500
+    return jsonify(result), status
 
 
 @pages_bp.post("/update-analysis")

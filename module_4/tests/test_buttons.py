@@ -235,3 +235,17 @@ def test_post_pull_data_converts_non_dict_return_to_json_dict():
 
     assert resp.status_code == 200
     assert resp.get_json() == {"ok": True, "inserted": 7}
+
+
+# negative test
+@pytest.mark.buttons
+def test_pull_data_returns_500_on_loader_error(client):
+    # Make pull_data_fn raise an exception via dependency injection
+    app = client.application
+    app.extensions["deps"]["pull_data_fn"] = lambda: (_ for _ in ()).throw(RuntimeError("boom"))
+
+    resp = client.post("/pull-data", headers={"Accept": "application/json"})
+    assert resp.status_code == 500
+    data = resp.get_json()
+    assert data["ok"] is False
+    assert "boom" in data["error"]
