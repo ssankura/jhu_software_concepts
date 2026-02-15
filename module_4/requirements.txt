@@ -12,3 +12,5 @@ requests>=2.31,<3
 
 # Testing framework (used for pytest tests)
 pytest>=7.0,<9
+
+pytest-cov
