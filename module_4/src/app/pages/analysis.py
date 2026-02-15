@@ -262,25 +262,34 @@ def analysis():
     )
 
 
-@pages_bp.post("/pull-data")
+@pages_bp.post("/pull-data", endpoint="pull_data_route")
 def pull_data():
+    # If a pull is already running, block this request
+    if is_running():
+        return jsonify({"busy": True}), 409
+
     deps = current_app.extensions.get("deps", {})
     pull_data_fn = deps["pull_data_fn"]
 
-    result = pull_data_fn()
+    start()
+    try:
+        result = pull_data_fn()
+        if not isinstance(result, dict):
+            result = {"ok": True, "inserted": int(result) if result is not None else 0}
+    except Exception as e:
+        result = {"ok": False, "error": str(e)}
+    finally:
+        stop()
 
-    # If request expects HTML (browser form submit), redirect
+    # Return HTML redirect for browser, JSON for tests/API clients
     wants_html = request.accept_mimetypes.accept_html and not request.accept_mimetypes.accept_json
-
     if wants_html:
         if result.get("ok"):
             flash(f"Pull Data completed. Inserted: {result.get('inserted', 0)}", "success")
         else:
             flash("Pull Data failed. Check logs.", "danger")
-
         return redirect(url_for("pages.analysis"))
 
-    # Otherwise (tests / API), return JSON
     return jsonify(result), 200
 
 

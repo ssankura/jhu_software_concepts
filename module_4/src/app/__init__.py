@@ -43,6 +43,15 @@ def create_app(test_config: Optional[dict] = None, deps: Optional[dict] = None) 
     scraper_fn: ScraperFn = deps.get("scraper_fn") or (lambda: [])
     loader_fn: LoaderFn = deps.get("loader_fn") or (lambda rows: 0)
     update_analysis_fn: UpdateAnalysisFn = deps.get("update_analysis_fn") or (lambda: None)
+
+    # NEW: default pull_data function (tests can override via deps["pull_data_fn"])
+    def default_pull_data_fn():
+        rows = scraper_fn()
+        inserted = loader_fn(rows)
+        return {"ok": True, "inserted": inserted}
+
+    pull_data_fn = deps.get("pull_data_fn") or default_pull_data_fn
+
     fetch_one_fn = deps.get("fetch_one_fn") or fetch_one
     fetch_all_fn = deps.get("fetch_all_fn") or fetch_all
 
@@ -50,6 +59,8 @@ def create_app(test_config: Optional[dict] = None, deps: Optional[dict] = None) 
         "scraper_fn": scraper_fn,
         "loader_fn": loader_fn,
         "update_analysis_fn": update_analysis_fn,
+        # NEW: required by analysis.py route and tests
+        "pull_data_fn": pull_data_fn,
         "fetch_one_fn": fetch_one_fn,
         "fetch_all_fn": fetch_all_fn,
     }

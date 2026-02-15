@@ -26,10 +26,11 @@
 
       <!-- Pull Data Button -->
       <form id="pullForm" method="POST" action="{{ url_for('pages.pull_data_route') }}">
-        <button id="pullBtn" type="submit">
-            Pull Data
+        <button id="pullBtn" type="submit" data-testid="pull-data-btn" {% if pull_running %}disabled{% endif %}>
+    Pull Data
         </button>
       </form>
+
       <script>
 document.getElementById("pullForm").addEventListener("submit", function () {
     const btn = document.getElementById("pullBtn");

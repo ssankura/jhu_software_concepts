@@ -2,12 +2,20 @@ import sys
 from pathlib import Path
 import os
 import psycopg
+import pytest
+
+# module_4/conftest.py
+import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
-sys.path.insert(0, str(SRC))
 
-import pytest
+# Make "app", "pull_data", "query_data", etc importable
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+
 from app import create_app
 
 def fake_fetch_one(sql: str):
