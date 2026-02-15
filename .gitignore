@@ -1,17 +1,24 @@
-# JetBrains / PyCharm
-.idea/
-*.iml
+# macOS
+.DS_Store
 
 # Python
 __pycache__/
 *.pyc
-.pytest_cache/
-.coverage
-htmlcov/
 
-# Virtual environments
-.venv/
+# Virtual envs
 venv/
+.venv/
+**/venv/
+**/.venv/
 
-# Sphinx build artifacts
+# Logs / artifacts
+*.log
+*.zip
 docs/build/
+
+# Data files (GradCafe outputs)
+*.json
+*.jsonl
+
+# IDE
+.idea/
