@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.pull_data.lock
+.coverage
+.pytest_cache/
+*.log

@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Grad School Cafe Data Analysis{% endblock %}
+
+{% block content %}
+<div class="container">
+
+  <!-- =============================== Header =============================== -->
+  <div class="header">
+    <div class="header-left">
+      <h1>Grad School Cafe Data Analysis</h1>
+    </div>
+
+    <div class="header-right">
+      <!-- Update Analysis Button -->
+      <form method="POST" action="{{ url_for('pages.update_analysis') }}">
+        <button
+          data-testid="update-analysis-btn"
+          class="btn btn-secondary tooltip"
+          data-tooltip="Refreshes this page using the newest database results. Disabled while Pull Data is running."
+          {% if pull_running %}disabled{% endif %}
+        >
+          Update Analysis
+        </button>
+      </form>
+
+      <!-- Pull Data Button -->
+      <form id="pullForm" method="POST" action="{{ url_for('pages.pull_data_route') }}">
+        <button id="pullBtn" type="submit">
+            Pull Data
+        </button>
+      </form>
+      <script>
+document.getElementById("pullForm").addEventListener("submit", function () {
+    const btn = document.getElementById("pullBtn");
+
+    // Disable button
+    btn.disabled = true;
+
+    // Change text
+    btn.innerText = "Running...";
+
+    // Optional styling
+    btn.style.opacity = "0.6";
+});
+</script>
+
+
+
+    </div>
+  </div>
+
+  <!-- =============================== Status / Messages =============================== -->
+  <div class="status-row">
+    {% if pull_running %}
+      <div class="status status-warning">
+        Pull Data is currently running… Update Analysis is disabled until it completes.
+      </div>
+    {% endif %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="status {% if category == 'warning' %}status-warning{% else %}status-ok{% endif %}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+  </div>
+
+  <!-- =============================== Analysis Section =============================== -->
+  <div class="qa-page">
+    <h2>Analysis</h2>
+
+    <!-- Q1 -->
+    <div class="qa-card">
+      <div class="qa-question">
+        How many entries do you have in your database who have applied for Fall 2026?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Applicant count: <strong>{{ results.q1_fall_2026_count }}</strong>
+      </div>
+    </div>
+
+    <!-- Q2 -->
+    <div class="qa-card">
+      <div class="qa-question">
+        What percentage of entries are from International students (not American or Other) (to two decimal places)?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+          Percent International: <strong>{{ results.q2_pct_international }}</strong>
+      </div>
+    </div>
+
+    <!-- Q3 -->
+    <div class="qa-card">
+      <div class="qa-question">
+        What is the average GPA, GRE, GRE V, GRE AW of applicants who provided these metrics?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Average GPA: <strong>{{ results.q3_avg_gpa }}</strong>,
+        Average GRE: <strong>{{ results.q3_avg_gre }}</strong>,
+        Average GRE V: <strong>{{ results.q3_avg_gre_v }}</strong>,
+        Average GRE AW: <strong>{{ results.q3_avg_gre_aw }}</strong>
+      </div>
+    </div>
+
+    <!-- Q4 -->
+    <div class="qa-card">
+      <div class="qa-question">
+        What is the average GPA of American students in Fall 2026?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Average GPA American: <strong>{{ results.q4_avg_gpa_american_fall_2026 }}</strong>
+      </div>
+    </div>
+
+    <!-- Q5 -->
+    <div class="qa-card">
+      <div class="qa-question">
+        What percent of entries for Fall 2025 are Acceptances (to two decimal places)?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Acceptance percent: <strong>{{ results.q5_pct_accepted_fall_2025 }}</strong>
+      </div>
+    </div>
+
+    <!-- Q6 -->
+    <div class="qa-card">
+      <div class="qa-question">
+        What is the average GPA of applicants who applied for Fall 2026 who are Acceptances?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Average GPA Acceptance: <strong>{{ results.q6_avg_gpa_accepted_fall_2026 }}</strong>
+      </div>
+    </div>
+
+    <!-- Q7 -->
+    <div class="qa-card">
+      <div class="qa-question">
+        How many entries are from applicants who applied to JHU for a masters degree in Computer Science?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        JHU Masters Computer Science count: <strong>{{ results.q7_jhu_ms_cs }}</strong>
+      </div>
+    </div>
+
+    <!-- Q8 -->
+    <div class="qa-card">
+      <div class="qa-question">
+        How many entries from 2026 are acceptances from applicants who applied to Georgetown University, MIT,
+        Stanford University, or Carnegie Mellon University for a PhD in Computer Science?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Count: <strong>{{ results.q8_top_univ_phd_cs_accepted_2026 }}</strong>
+      </div>
+    </div>
+
+    <!-- Q9 -->
+    <div class="qa-card">
+      <div class="qa-question">
+        Do your numbers for question 8 change if you use LLM Generated Fields (rather than your downloaded fields)?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Using raw downloaded fields, count: <strong>{{ results.q9_top_univ_phd_cs_accepted_2026_raw }}</strong>
+      </div>
+    </div>
+
+    <!-- Custom Q10A -->
+    <div class="qa-card">
+      <div class="qa-question">
+        Custom Question1: What are the top 5 most common programs applicants applied to in Fall 2026?
+      </div>
+
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+
+        <table>
+          <tr>
+            <th>Program</th>
+            <th>Applicants</th>
+          </tr>
+
+          {% for program, count in results.q10a_top_programs %}
+          <tr>
+            <td>{{ program }}</td>
+            <td>{{ count }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+
+    <!-- Custom Q10B -->
+    <div class="qa-card">
+      <div class="qa-question">
+        Custom Question2: What is the average GPA of International applicants?
+      </div>
+
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Average GPA International: <strong>{{ results.q10b_avg_gpa_international }}</strong>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
