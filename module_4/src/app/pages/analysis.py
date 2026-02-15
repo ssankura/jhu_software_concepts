@@ -31,7 +31,14 @@ from flask import (
 
 from app.pages import pages_bp
 from app.pages.pull_state import is_running, start, stop
+import os
+import sys
+from pathlib import Path
 
+# --- Path setup: allow autodoc to import modules from /src ---
+ROOT = Path(__file__).resolve().parents[2]   # module_4/
+SRC = ROOT / "src"                          # module_4/src
+sys.path.insert(0, str(SRC))
 
 # ---------------------------------------------------------------------------
 # Formatting helpers (kept here so the template stays simple and consistent)

@@ -27,6 +27,14 @@ from typing import Callable, Optional
 from flask import Flask
 from app.db import fetch_one, fetch_all
 
+import os
+import sys
+from pathlib import Path
+
+# --- Path setup: allow autodoc to import modules from /src ---
+ROOT = Path(__file__).resolve().parents[2]   # module_4/
+SRC = ROOT / "src"                          # module_4/src
+sys.path.insert(0, str(SRC))
 
 # ---------------------------------------------------------------------------
 # Dependency Type Definitions

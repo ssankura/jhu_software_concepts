@@ -19,6 +19,14 @@ If the lock file does not exist → system is idle.
 
 from pathlib import Path
 
+import os
+import sys
+from pathlib import Path
+
+# --- Path setup: allow autodoc to import modules from /src ---
+ROOT = Path(__file__).resolve().parents[2]   # module_4/
+SRC = ROOT / "src"                          # module_4/src
+sys.path.insert(0, str(SRC))
 
 # ---------------------------------------------------------------------------
 # Lock File Location
