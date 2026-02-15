@@ -5,3 +5,9 @@ __pycache__/
 .coverage
 .pytest_cache/
 *.log
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
