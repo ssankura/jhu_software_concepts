@@ -1,0 +1,17 @@
+# JetBrains / PyCharm
+.idea/
+*.iml
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+
+# Sphinx build artifacts
+docs/build/
