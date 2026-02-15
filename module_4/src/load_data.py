@@ -4,18 +4,24 @@ load_data.py
 Loads cleaned GradCafe applicant data from a JSON file into a PostgreSQL database
 using psycopg.
 
-Module 3 requirements satisfied:
-- Uses Python + psycopg to load data into PostgreSQL (not manual psql import)
+Module 3/4 Requirements Satisfied:
+----------------------------------
+- Uses Python + psycopg to load data into PostgreSQL (no manual psql import)
 - Creates the `applicants` table if it does not exist
-- Inserts records in batches for performance
+- Inserts records in batches for performance and determinism
 - Prevents duplicate entries using a UNIQUE constraint on `url`
+  (idempotent re-runs and repeated Pull Data do not create duplicates)
 
 Run:
+----
   export DATABASE_URL="postgresql://<user>:<pass>@localhost:5432/gradcafe"
   python3 load_data.py --file applicant_data.json
 
-Notes:
-- Writes timestamped logs to both console + load_data.log
+Operational Notes:
+------------------
+- Writes timestamped logs to both console and load_data.log
+- Skips records without a URL because url is the uniqueness key
+- Uses `ON CONFLICT (url) DO NOTHING` for safe idempotency
 """
 
 import argparse
@@ -28,9 +34,18 @@ from typing import Any, Dict, List, Optional
 
 import psycopg
 
-# ---------------------------------------------------
-# Logging Configuration (console + file with timestamps)
-# ---------------------------------------------------
+
+# ============================================================================
+# Logging Configuration
+# ----------------------------------------------------------------------------
+# Configure one logger for this module and attach both:
+#   1) File handler (persisted logs for debugging after runs)
+#   2) Console handler (immediate feedback while running)
+#
+# The "if not logger.handlers" guard prevents duplicate handlers if the module
+# is imported multiple times (common during tests or Flask reloads).
+# ============================================================================
+
 logger = logging.getLogger("db_loader")
 logger.setLevel(logging.INFO)
 
@@ -50,8 +65,28 @@ if not logger.handlers:
     logger.addHandler(console_handler)
 
 
+# ============================================================================
+# Data cleaning helpers
+# ----------------------------------------------------------------------------
+# These functions normalize values so database inserts are consistent and safe.
+# They are defensive because scraped JSON often has:
+# - empty strings
+# - inconsistent key names
+# - mixed numeric formats
+# - missing values
+# ============================================================================
+
 def clean_text(value: Any) -> Optional[str]:
-    """Return a stripped string or None for empty/blank values."""
+    """
+    Normalize text fields.
+
+    Returns:
+        - Stripped string for non-empty input
+        - None for None, empty, or whitespace-only input
+
+    Why:
+        Treating "" and "   " as None prevents storing meaningless values in DB.
+    """
     if value is None:
         return None
     text = str(value).strip()
@@ -59,7 +94,16 @@ def clean_text(value: Any) -> Optional[str]:
 
 
 def clean_float(value: Any) -> Optional[float]:
-    """Convert a value to float. Return None if conversion fails."""
+    """
+    Normalize numeric fields as floats.
+
+    Returns:
+        float if conversion succeeds, otherwise None.
+
+    Why:
+        Scraped numeric fields can arrive as strings ("320") or be malformed.
+        Returning None avoids insert failures and keeps downstream SQL stable.
+    """
     if value is None:
         return None
     try:
@@ -69,9 +113,14 @@ def clean_float(value: Any) -> Optional[float]:
 
 
 def clean_date(value: Any) -> Optional[datetime.date]:
-    """Parse a date string into a date object.
+    """
+    Parse a date string into a `datetime.date`.
 
     Supports common GradCafe-style formats. Returns None if parsing fails.
+
+    Why:
+        Dates often appear in multiple formats depending on scraper version or site.
+        Standardizing to DATE ensures consistent queries and schema correctness.
     """
     if value is None:
         return None
@@ -96,9 +145,26 @@ def clean_date(value: Any) -> Optional[datetime.date]:
     return None
 
 
+# ============================================================================
+# Schema management
+# ----------------------------------------------------------------------------
+# The loader is responsible for ensuring the required table exists.
+# UNIQUE on url enforces idempotency (duplicate pulls do not duplicate rows).
+# ============================================================================
+
 def create_table(conn: psycopg.Connection) -> None:
-    """Create the applicants table and a UNIQUE index on url (if missing)."""
+    """
+    Create the applicants table and a UNIQUE index on url if missing.
+
+    Args:
+        conn: Active psycopg connection (transaction managed by context manager).
+
+    Why:
+        Ensures the loader can run on a fresh database (CI, new dev machine)
+        without requiring manual setup.
+    """
     logger.info("Ensuring applicants table exists...")
+
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS applicants (
@@ -121,18 +187,40 @@ def create_table(conn: psycopg.Connection) -> None:
         """
     )
 
-    # Prevent duplicates across reloads and later "Pull Data" updates.
+    # Prevent duplicates across reloads and repeated Pull Data runs.
+    # This supports the assignment's "idempotency/constraints" requirement.
     conn.execute(
         """
         CREATE UNIQUE INDEX IF NOT EXISTS applicants_url_uniq
         ON applicants(url);
         """
     )
+
     logger.info("Table and UNIQUE index verified/created.")
 
 
+# ============================================================================
+# Record mapping
+# ----------------------------------------------------------------------------
+# Converts a raw JSON record into the DB-ready structure.
+# Accepts multiple possible input keys to be robust across pipeline versions.
+# ============================================================================
+
 def map_record(record: Dict[str, Any]) -> Dict[str, Any]:
-    # Accept multiple possible key names (robust across your pipeline versions)
+    """
+    Map a raw JSON record into a normalized dict matching DB columns.
+
+    Args:
+        record: One JSON object representing an applicant row.
+
+    Returns:
+        dict with keys matching INSERT statement placeholders.
+
+    Notes:
+        URL is treated as the uniqueness key.
+        Records missing URL are skipped by the loader.
+    """
+    # Accept multiple possible key names (robust across pipeline versions)
     url = (
         record.get("url")
         or record.get("overview_url")
@@ -140,6 +228,7 @@ def map_record(record: Dict[str, Any]) -> Dict[str, Any]:
         or record.get("page_url")
     )
 
+    # Program name has historically existed under multiple keys in the pipeline
     program = (
         record.get("program_name")
         or record.get("program")
@@ -154,25 +243,29 @@ def map_record(record: Dict[str, Any]) -> Dict[str, Any]:
         "date_added": clean_date(record.get("date_added")),
         "url": clean_text(url),
 
+        # Applicant status is stored as normalized text (Accepted/Rejected/etc.)
         "status": clean_text(record.get("applicant_status")),
 
-        # your JSON calls this semester_year_start (not start_term)
+        # Term fields differ by pipeline version; we normalize into `term`
         "term": clean_text(record.get("semester_year_start") or record.get("start_term")),
 
+        # Citizenship field can vary; normalize into `us_or_international`
         "us_or_international": clean_text(
             record.get("international_or_american")
             or record.get("citizenship")
             or record.get("us_or_international")
         ),
 
+        # Numeric metrics (optional)
         "gpa": clean_float(record.get("gpa")),
         "gre": clean_float(record.get("gre_score") or record.get("gre_general")),
         "gre_v": clean_float(record.get("gre_v_score") or record.get("gre_verbal")),
         "gre_aw": clean_float(record.get("gre_aw")),
 
+        # Degree level can vary; normalize into `degree`
         "degree": clean_text(record.get("masters_or_phd") or record.get("degree_level")),
 
-        # your JSON uses program_name_clean/university_clean
+        # LLM-generated / cleaned fields used for analysis queries
         "llm_generated_program": clean_text(
             record.get("program_name_clean")
             or record.get("llm-generated-program")
@@ -186,9 +279,26 @@ def map_record(record: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# ============================================================================
+# JSON Loading
+# ----------------------------------------------------------------------------
+# Loads cleaned JSON exported from your ETL pipeline.
+# Ensures data is a list of dict records before inserting.
+# ============================================================================
 
 def load_json(path: str) -> List[Dict[str, Any]]:
-    """Load JSON file and return a list of dict records."""
+    """
+    Load a JSON file and return a list of dictionary records.
+
+    Args:
+        path: File path to the JSON file.
+
+    Returns:
+        list[dict]: Valid JSON objects only.
+
+    Raises:
+        ValueError: If JSON root is not a list (assignment expects list of records).
+    """
     logger.info(f"Loading JSON file: {path}")
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -196,18 +306,34 @@ def load_json(path: str) -> List[Dict[str, Any]]:
     if not isinstance(data, list):
         raise ValueError("JSON file must contain a list of objects (records).")
 
-    # Defensive: keep only dict-like items.
+    # Defensive: filter out non-dict items to avoid insert failures.
     records = [x for x in data if isinstance(x, dict)]
     logger.info(f"Loaded {len(records)} dict records from JSON.")
     return records
 
 
+# ============================================================================
+# Primary loader function
+# ----------------------------------------------------------------------------
+# Handles:
+# - DB connection
+# - schema creation
+# - batch inserts with ON CONFLICT DO NOTHING
+# - summary logging
+# ============================================================================
+
 def load_data(json_file: str, batch_size: int = 1000) -> None:
-    """Load JSON records into PostgreSQL.
+    """
+    Load JSON records into PostgreSQL.
 
     Args:
         json_file: Path to the cleaned JSON file.
         batch_size: Number of records inserted per batch commit.
+
+    Why batching:
+        - Faster inserts than per-row commits
+        - More deterministic performance for CI
+        - Lower transaction overhead
     """
     start_time = time.time()
     logger.info(f"Starting data load from file: {json_file} (batch_size={batch_size})")
@@ -221,6 +347,8 @@ def load_data(json_file: str, batch_size: int = 1000) -> None:
 
     data = load_json(json_file)
 
+    # Parameterized insert statement.
+    # ON CONFLICT(url) DO NOTHING enforces idempotency for duplicate pulls.
     insert_sql = """
         INSERT INTO applicants (
             program, comments, date_added, url, status, term,
@@ -239,32 +367,44 @@ def load_data(json_file: str, batch_size: int = 1000) -> None:
     skipped_missing_url = 0
     committed_batches = 0
 
+    # psycopg connection context manager:
+    # - opens connection
+    # - ensures close even on exceptions
     with psycopg.connect(database_url) as conn:
         logger.info("Connected to PostgreSQL.")
         create_table(conn)
 
         batch: List[Dict[str, Any]] = []
+
         for idx, record in enumerate(data, start=1):
             row = map_record(record)
 
-            # URL is required to dedupe reliably; skip rows missing url.
+            # URL is required to dedupe reliably; skip rows missing URL.
             if row["url"] is None:
                 skipped_missing_url += 1
-                # Keep warnings light (log first few + every 1000th skip)
+
+                # Avoid noisy logs: warn only for first few and periodic milestones
                 if skipped_missing_url <= 5 or skipped_missing_url % 1000 == 0:
-                    logger.warning(f"Skipping record #{idx} due to missing URL (skipped={skipped_missing_url}).")
+                    logger.warning(
+                        f"Skipping record #{idx} due to missing URL (skipped={skipped_missing_url})."
+                    )
                 continue
 
             batch.append(row)
 
+            # When batch is full, insert and commit.
             if len(batch) >= batch_size:
                 with conn.cursor() as cur:
                     cur.executemany(insert_sql, batch)
                 conn.commit()
+
                 committed_batches += 1
-                logger.info(f"Committed batch #{committed_batches} (processed up to record #{idx}).")
+                logger.info(
+                    f"Committed batch #{committed_batches} (processed up to record #{idx})."
+                )
                 batch = []
 
+        # Insert remaining rows after loop ends.
         if batch:
             with conn.cursor() as cur:
                 cur.executemany(insert_sql, batch)
@@ -272,6 +412,7 @@ def load_data(json_file: str, batch_size: int = 1000) -> None:
             committed_batches += 1
             logger.info(f"Committed final batch #{committed_batches} (end of file).")
 
+        # Summary statistics for debugging and assignment evidence.
         total = conn.execute("SELECT COUNT(*) FROM applicants;").fetchone()[0]
         elapsed = round(time.time() - start_time, 2)
 
@@ -280,12 +421,26 @@ def load_data(json_file: str, batch_size: int = 1000) -> None:
         logger.info(f"Total batches committed: {committed_batches}")
         logger.info(f"Total execution time: {elapsed} seconds")
 
-        # Keep a friendly final console line too
+        # Friendly final console output for humans
         print(f"\n✅ Data loading complete. Total records in database: {total}")
 
 
+# ============================================================================
+# CLI entrypoint
+# ----------------------------------------------------------------------------
+# Makes this module usable as a script:
+#   python3 load_data.py --file applicant_data.json
+# ============================================================================
+
 def main() -> None:
-    """Parse CLI args and run the loader."""
+    """
+    Parse CLI args and run the loader.
+
+    This exists so the loader can be executed:
+    - locally from terminal
+    - in CI scripts
+    - in Makefile targets (if added later)
+    """
     parser = argparse.ArgumentParser(
         description="Load applicant JSON data into PostgreSQL."
     )
@@ -300,11 +455,4 @@ def main() -> None:
     load_data(args.file, batch_size=args.batch_size)
 
 
-if __name__ == "__main__":  # pragma: no cover
-    try:
-        logger.info("Starting PostgreSQL loader script...")
-        main()
-        logger.info("Loader script completed successfully.")
-    except Exception as e:
-        logger.error(f"Loader script failed: {str(e)}", exc_info=True)
-        raise
+# Standard Python

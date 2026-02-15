@@ -1,16 +1,29 @@
 """
 query_data.py
 
-Module 3 - Querying PostgreSQL (GradCafe dataset)
+Module 3/4 - Querying PostgreSQL (GradCafe dataset)
 
-This script connects to a PostgreSQL database (using DATABASE_URL),
-runs the required SQL analysis queries, prints results to the console,
-and includes two custom analysis questions.
+This module supports two use cases:
 
-How to run:
------------
+1) CLI reporting (Module 3):
+   - Connects to PostgreSQL via DATABASE_URL
+   - Runs the required SQL analytics queries
+   - Prints results in a screenshot-friendly format
+
+2) Testability support (Module 4):
+   - Exposes `query_applicants_as_dicts()` which returns rows as dictionaries
+     with stable keys used by templates/tests.
+
+How to run (CLI):
+-----------------
 export DATABASE_URL="postgresql://graduser:grad123@localhost:5432/gradcafe"
 python3 query_data.py
+
+Design Notes:
+-------------
+- Uses psycopg for PostgreSQL connectivity.
+- Uses defensive formatting for Decimal outputs (common for numeric SQL types).
+- Keeps query printing logic in `run_query()` so each question stays readable.
 """
 
 import os
@@ -19,6 +32,13 @@ from typing import Any, Callable, Optional
 
 import psycopg
 
+
+# ============================================================================
+# Connection Management
+# ----------------------------------------------------------------------------
+# Centralizes DATABASE_URL handling so both CLI runs and tests fail early with a
+# clear message if configuration is missing.
+# ============================================================================
 
 def get_connection():
     """
@@ -29,6 +49,12 @@ def get_connection():
 
     Raises:
         ValueError: If DATABASE_URL environment variable is not set.
+
+    Why:
+        Using DATABASE_URL keeps configuration portable across:
+        - local dev
+        - GitHub Actions CI
+        - Read the Docs / documentation examples
     """
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
@@ -40,51 +66,70 @@ def get_connection():
     return psycopg.connect(db_url)
 
 
+# ============================================================================
+# Output normalization helpers
+# ----------------------------------------------------------------------------
+# PostgreSQL numeric columns often arrive as Decimal objects. Converting to float
+# makes console output (and sometimes serialization) cleaner and consistent.
+# ============================================================================
+
 def _clean_value(value):
     """
-    Convert Decimal values to float for cleaner console output.
+    Convert Decimal values to float for cleaner output.
 
     Args:
-        value: Any value returned from PostgreSQL
+        value: Any value returned from PostgreSQL.
 
     Returns:
-        float | original value
+        float if value is Decimal; otherwise returns original value.
     """
     if isinstance(value, Decimal):
         return float(value)
     return value
 
 
-from decimal import Decimal
+# ============================================================================
+# Query runner (CLI formatting)
+# ----------------------------------------------------------------------------
+# Prints results in a screenshot-style format similar to assignment examples.
+# Supports:
+# - single scalar outputs (COUNT, AVG, etc.)
+# - multi-column single-row outputs (e.g., 4 averages)
+# - multi-row outputs (e.g., top programs table)
+# ============================================================================
 
 def run_query(cursor, title, sql, multi=False, label=None, multi_labels=None):
     """
-    Executes SQL and prints in a screenshot-style output.
+    Execute SQL query and print results in a screenshot-style output.
 
     Args:
-        cursor: psycopg cursor
-        title: question title (can be printed or ignored)
-        sql: SQL query string
-        multi: True if query returns multiple rows
-        label: label for single-value outputs (e.g., "Applicant count")
-        multi_labels: labels for multi-column single-row outputs (e.g., averages)
+        cursor: psycopg cursor object.
+        title: Human-readable title for the query (kept for readability).
+        sql: SQL query string.
+        multi: True if the query returns multiple rows.
+        label: Label for single-value outputs (e.g., "Applicant count").
+        multi_labels: Labels for multi-column single-row outputs (e.g., averages).
+
+    Notes:
+        - This function prints to console (for Module 3 screenshots).
+        - Web UI rendering is handled separately by Flask routes/templates.
     """
     cursor.execute(sql)
 
     # -------------------- Multi-row results --------------------
+    # Used for queries like "Top 5 programs" where multiple rows are expected.
     if multi:
         rows = cursor.fetchall()
-        print("")  # spacing line (like screenshot)
+        print("")  # spacing line for readability
         for row in rows:
             cleaned = []
             for v in row:
-                if isinstance(v, Decimal):
-                    v = float(v)
-                cleaned.append(v)
+                cleaned.append(_clean_value(v))
             print(*cleaned)
         return
 
     # -------------------- Single-row results --------------------
+    # Most analytics queries return exactly one row.
     row = cursor.fetchone()
     if row is None:
         print("No results")
@@ -92,11 +137,10 @@ def run_query(cursor, title, sql, multi=False, label=None, multi_labels=None):
 
     cleaned = []
     for v in row:
-        if isinstance(v, Decimal):
-            v = float(v)
-        cleaned.append(v)
+        cleaned.append(_clean_value(v))
 
-    # Single value
+    # -------------------- Scalar output --------------------
+    # Example: COUNT(*), AVG(gpa), percent calculations, etc.
     if len(cleaned) == 1:
         value = cleaned[0]
         if label:
@@ -105,7 +149,8 @@ def run_query(cursor, title, sql, multi=False, label=None, multi_labels=None):
             print(value)
         return
 
-    # Multi-value (like averages)
+    # -------------------- Multi-value output --------------------
+    # Example: averages for GPA, GRE, GRE V, GRE AW in one row.
     if multi_labels and len(multi_labels) == len(cleaned):
         parts = []
         for lab, val in zip(multi_labels, cleaned):
@@ -114,17 +159,39 @@ def run_query(cursor, title, sql, multi=False, label=None, multi_labels=None):
     else:
         print(*cleaned)
 
+
+# ============================================================================
+# Testability helper (Module 4)
+# ----------------------------------------------------------------------------
+# Returns DB rows as dictionaries with stable keys.
+# This is used by tests to verify schema/data correctness without parsing HTML.
+# ============================================================================
+
 def query_applicants_as_dicts(
     limit: int = 10,
     fetch_all_fn: Optional[Callable[[str], list]] = None
 ) -> list[dict[str, Any]]:
     """
-    Return applicants as a list of dicts with required keys.
-    Used for Module 4 testability.
+    Return applicants as a list of dicts using the required schema keys.
+
+    This function exists primarily for Module 4 testing, where tests need to:
+    - verify inserted rows exist
+    - validate required columns are present
+    - validate uniqueness/idempotency behavior
+
+    Args:
+        limit: Maximum number of rows to return (default: 10).
+        fetch_all_fn: Optional injected dependency for fetching rows.
+                      If None, defaults to app.db.fetch_all.
+
+    Returns:
+        list[dict[str, Any]]: List of dict rows with stable keys.
     """
     if fetch_all_fn is None:
-        from app.db import fetch_all as fetch_all_fn  # local import to avoid circulars
+        # Local import avoids circular dependencies when app imports query layer.
+        from app.db import fetch_all as fetch_all_fn
 
+    # LIMIT is cast to int to avoid accidental SQL injection through non-int inputs.
     sql = f"""
     SELECT
         url, term, status, us_or_international, gpa, gre, gre_v, gre_aw,
@@ -135,6 +202,7 @@ def query_applicants_as_dicts(
     """
     rows = fetch_all_fn(sql)
 
+    # Keys match the SELECT order and represent required fields for the app/tests.
     keys = [
         "url", "term", "status", "us_or_international", "gpa", "gre", "gre_v", "gre_aw",
         "degree", "program", "llm_generated_program", "llm_generated_university"
@@ -146,19 +214,26 @@ def query_applicants_as_dicts(
     return out
 
 
+# ============================================================================
+# CLI Entry Point (Module 3 reporting)
+# ----------------------------------------------------------------------------
+# Runs all required queries and prints answers.
+# Used for screenshots or sanity-checking DB state.
+# ============================================================================
+
 def main():
     """
-    Main execution function.
+    Run the required Module 3 SQL analytics queries and print results.
 
-    Runs all required Module 3 SQL analytical queries and prints
-    answers in formatted console output.
+    Notes:
+        - Output is console-based (for assignment screenshots).
+        - The Flask web UI performs similar queries but renders via templates.
     """
-
     with get_connection() as conn:
         with conn.cursor() as cursor:
 
             # ----------------------------------------------------------
-            # Q1
+            # Q1: Count Fall 2026 applicants
             # ----------------------------------------------------------
             run_query(
                 cursor,
@@ -172,7 +247,8 @@ def main():
             )
 
             # ----------------------------------------------------------
-            # Q2
+            # Q2: Percent international applicants
+            # NULLIF prevents divide-by-zero when DB is empty.
             # ----------------------------------------------------------
             run_query(
                 cursor,
@@ -191,7 +267,8 @@ def main():
             )
 
             # ----------------------------------------------------------
-            # Q3
+            # Q3: Average GPA/GRE metrics
+            # Printed as labeled values for screenshot clarity.
             # ----------------------------------------------------------
             run_query(
                 cursor,
@@ -213,7 +290,7 @@ def main():
             )
 
             # ----------------------------------------------------------
-            # Q4
+            # Q4: Avg GPA of American students (Fall 2026)
             # ----------------------------------------------------------
             run_query(
                 cursor,
@@ -229,7 +306,7 @@ def main():
             )
 
             # ----------------------------------------------------------
-            # Q5
+            # Q5: Acceptance % for Fall 2025
             # ----------------------------------------------------------
             run_query(
                 cursor,
@@ -248,7 +325,7 @@ def main():
             )
 
             # ----------------------------------------------------------
-            # Q6
+            # Q6: Avg GPA of accepted applicants (Fall 2026)
             # ----------------------------------------------------------
             run_query(
                 cursor,
@@ -264,7 +341,7 @@ def main():
             )
 
             # ----------------------------------------------------------
-            # Q7
+            # Q7: JHU Masters CS applicants (LLM standardized fields)
             # ----------------------------------------------------------
             run_query(
                 cursor,
@@ -284,7 +361,7 @@ def main():
             )
 
             # ----------------------------------------------------------
-            # Q8
+            # Q8: Accepted PhD CS applicants in 2026 at top universities
             # ----------------------------------------------------------
             run_query(
                 cursor,
@@ -309,7 +386,7 @@ def main():
             )
 
             # ----------------------------------------------------------
-            # Q9
+            # Q9: Same query using raw downloaded fields (not LLM fields)
             # ----------------------------------------------------------
             run_query(
                 cursor,
@@ -334,7 +411,7 @@ def main():
             )
 
             # ----------------------------------------------------------
-            # Custom Q10A
+            # Custom Q10A: Top 5 programs (Fall 2026)
             # ----------------------------------------------------------
             run_query(
                 cursor,
@@ -351,7 +428,7 @@ def main():
             )
 
             # ----------------------------------------------------------
-            # Custom Q10B
+            # Custom Q10B: Avg GPA of international applicants
             # ----------------------------------------------------------
             run_query(
                 cursor,
@@ -366,5 +443,4 @@ def main():
             )
 
 
-if __name__ == "__main__":
-    main()
+# Standard s

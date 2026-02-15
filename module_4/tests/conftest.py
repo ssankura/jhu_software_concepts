@@ -1,57 +1,131 @@
+"""
+conftest.py
+
+Pytest configuration and shared fixtures for Module 4 test suite.
+
+Responsibilities:
+-----------------
+- Make src/ importable (so "app", "pull_data", etc. resolve correctly)
+- Provide fake dependency injection for web/unit tests
+- Provide real PostgreSQL-backed fixtures for db/integration tests
+- Ensure database isolation between tests
+- Enforce uniqueness policy (url UNIQUE)
+
+Test Architecture:
+------------------
+We separate tests into two layers:
+
+1) Unit/Web tests:
+   - Use fake scraper, fake loader, fake query functions
+   - Fast, deterministic, no DB required
+
+2) DB/Integration tests:
+   - Use real PostgreSQL connection
+   - Insert deterministic rows
+   - Validate schema, idempotency, uniqueness
+"""
+
 import sys
 from pathlib import Path
 import os
 import psycopg
 import pytest
 
-# module_4/conftest.py
-import sys
-from pathlib import Path
+
+# ============================================================================
+# Ensure src/ is importable
+# ----------------------------------------------------------------------------
+# This allows imports like:
+#     from app import create_app
+#
+# Without modifying PYTHONPATH manually.
+# Required for GitHub Actions and local pytest runs.
+# ============================================================================
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
-# Make "app", "pull_data", "query_data", etc importable
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 
 from app import create_app
 
+
+# ============================================================================
+# Fake Query Functions (Unit/Web tests)
+# ----------------------------------------------------------------------------
+# These simulate database responses so web tests do not require PostgreSQL.
+# Keeps tests fast and deterministic.
+# ============================================================================
+
 def fake_fetch_one(sql: str):
-    # counts
+    """
+    Simulate fetch_one behavior.
+
+    Logic:
+    - COUNT queries return 1
+    - Percent/ROUND queries return 12.34
+    - Otherwise return 3.9 (used for averages)
+    """
     if "COUNT" in sql:
         return 1
-    # percentages
+
     if "100.0" in sql or "ROUND" in sql:
         return 12.34
-    # averages
+
     return 3.9
 
+
 def fake_fetch_all(sql: str):
-    # q3 averages query expects one row with 4 values
+    """
+    Simulate fetch_all behavior.
+
+    Supports:
+    - Q3 average metrics (returns one row with 4 values)
+    - Top programs table (returns two rows)
+    """
     if "AVG" in sql and "FROM applicants" in sql:
         return [(3.9, 320, 165, 4.0)]
-    # top programs table
+
     return [("Computer Science", 10), ("Data Science", 7)]
 
 
+# ============================================================================
+# Fake Rows Fixture
+# ----------------------------------------------------------------------------
+# Provides deterministic rows for pull-data button tests.
+# Structure only needs to minimally satisfy loader contract.
+# ============================================================================
+
 @pytest.fixture()
 def fake_rows():
-    # Minimal fake record list (shape doesn't matter yet, used in buttons tests later)
     return [
         {"url": "https://example.com/r/1", "term": "Fall 2026", "status": "Accepted"},
         {"url": "https://example.com/r/2", "term": "Fall 2026", "status": "Rejected"},
     ]
 
 
+# ============================================================================
+# Flask App (Unit/Web version)
+# ----------------------------------------------------------------------------
+# Uses dependency injection to replace:
+# - scraper
+# - loader
+# - update_analysis
+# - DB query functions
+#
+# No real database is touched.
+# ============================================================================
+
 @pytest.fixture()
 def app(fake_rows):
+
     def fake_scraper():
         return list(fake_rows)
 
     def fake_loader(rows):
-        # return how many rows would be inserted
+        # Pretend all rows were inserted
         return len(rows)
 
     def fake_update_analysis():
@@ -72,16 +146,35 @@ def app(fake_rows):
 
 @pytest.fixture()
 def client(app):
+    """
+    Standard Flask test client (unit/web tests).
+    """
     return app.test_client()
 
+
+# ============================================================================
+# Flask App (Real DB version)
+# ----------------------------------------------------------------------------
+# Used for:
+# - db tests
+# - integration tests
+#
+# Injects:
+# - deterministic scraper
+# - real PostgreSQL loader
+# - real fetch_one/fetch_all
+# ============================================================================
 
 @pytest.fixture()
 def app_db(database_url, db_clean):
     """
-    Flask app wired to a real DB loader for db tests.
-    Scraper returns deterministic rows; loader inserts into Postgres.
+    Flask app wired to a real PostgreSQL loader.
+
+    Ensures:
+    - Rows are actually inserted
+    - Schema constraints are respected
+    - Idempotency via UNIQUE(url) works
     """
-    from app import create_app
 
     rows = [
         {
@@ -118,8 +211,12 @@ def app_db(database_url, db_clean):
         return list(rows)
 
     def db_loader(in_rows):
-        import psycopg
+        """
+        Real DB insert logic for tests.
 
+        Uses ON CONFLICT DO NOTHING to enforce idempotency.
+        Asserts required non-null fields (e.g., url).
+        """
         insert_sql = """
         INSERT INTO applicants (
             url, term, status, us_or_international, gpa, gre, gre_v, gre_aw,
@@ -135,18 +232,15 @@ def app_db(database_url, db_clean):
         with psycopg.connect(database_url) as conn:
             with conn.cursor() as cur:
                 for r in in_rows:
-                    # required non-null fields (enforced by schema)
                     assert r.get("url"), "url is required"
                     cur.execute(insert_sql, r)
             conn.commit()
 
         return len(in_rows)
 
-    # For db tests we can still fake analysis update (no-op)
     def fake_update_analysis():
         return None
 
-    # Also inject DB query functions for /analysis rendering during db/integration tests
     from app.db import fetch_one, fetch_all
 
     app = create_app(
@@ -164,11 +258,24 @@ def app_db(database_url, db_clean):
 
 @pytest.fixture()
 def client_db(app_db):
+    """
+    Flask test client backed by real PostgreSQL.
+    """
     return app_db.test_client()
 
 
+# ============================================================================
+# Database Fixtures
+# ----------------------------------------------------------------------------
+# Session-scoped fixtures reduce setup cost.
+# Function-scoped cleanup ensures test isolation.
+# ============================================================================
+
 @pytest.fixture(scope="session")
 def database_url():
+    """
+    Require DATABASE_URL to be set for DB tests.
+    """
     url = os.environ.get("DATABASE_URL")
     assert url, "DATABASE_URL must be set for db tests"
     return url
@@ -177,8 +284,10 @@ def database_url():
 @pytest.fixture(scope="session")
 def db_init_schema(database_url):
     """
-    Create the applicants table if it doesn't exist.
-    Uniqueness policy: url is UNIQUE.
+    Create applicants table if missing.
+
+    Uniqueness policy:
+        url is UNIQUE (idempotency requirement).
     """
     ddl = """
     CREATE TABLE IF NOT EXISTS applicants (
@@ -206,7 +315,12 @@ def db_init_schema(database_url):
 @pytest.fixture()
 def db_clean(database_url, db_init_schema):
     """
-    Truncate applicants before each db test.
+    Truncate applicants table before each DB test.
+
+    Ensures:
+    - Clean slate per test
+    - No cross-test contamination
+    - Deterministic row counts
     """
     with psycopg.connect(database_url) as conn:
         with conn.cursor() as cur:

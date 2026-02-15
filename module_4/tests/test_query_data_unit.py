@@ -1,8 +1,12 @@
+# Tests for query_data module functionality
+
 import os
 import pytest
 from decimal import Decimal
 import runpy
 
+
+# Test that get_connection raises ValueError when DATABASE_URL is missing
 @pytest.mark.db
 def test_get_connection_raises_when_missing(monkeypatch):
     import query_data
@@ -11,6 +15,7 @@ def test_get_connection_raises_when_missing(monkeypatch):
         query_data.get_connection()
 
 
+# Test Decimal conversion helper
 @pytest.mark.db
 def test_clean_value_decimal():
     import query_data
@@ -18,6 +23,7 @@ def test_clean_value_decimal():
     assert query_data._clean_value("x") == "x"
 
 
+# Test run_query multi-row, single-row, and no-result branches
 @pytest.mark.db
 def test_run_query_multi_and_single_branches(capsys):
     import query_data
@@ -39,25 +45,26 @@ def test_run_query_multi_and_single_branches(capsys):
 
     cur = Cursor()
 
-    # multi path
+    # multi-row branch
     query_data.run_query(cur, "t", "SQL", multi=True)
     out = capsys.readouterr().out
     assert "1.0 a" in out
     assert "2.0 b" in out
 
-    # single value + label
+    # single value branch
     cur._fetchone = (Decimal("9.99"),)
     query_data.run_query(cur, "t", "SQL2", label="Val")
     out = capsys.readouterr().out
     assert "Val: 9.99" in out
 
-    # no results
+    # no results branch
     cur._fetchone = None
     query_data.run_query(cur, "t", "SQL3")
     out = capsys.readouterr().out
     assert "No results" in out
 
 
+# Test query_applicants_as_dicts with injected fetcher
 @pytest.mark.db
 def test_query_applicants_as_dicts_injected_fetcher():
     import query_data
@@ -71,6 +78,7 @@ def test_query_applicants_as_dicts_injected_fetcher():
     assert "llm_generated_university" in rows[0]
 
 
+# Test that main() calls run_query
 @pytest.mark.db
 def test_main_calls_run_query(monkeypatch):
     import query_data
@@ -101,9 +109,8 @@ def test_main_calls_run_query(monkeypatch):
     query_data.main()
     assert calls["n"] > 0
 
-import pytest
 
-
+# Duplicate test: ensure get_connection raises when DATABASE_URL missing
 @pytest.mark.db
 def test_get_connection_raises_when_database_url_missing(monkeypatch):
     import query_data
@@ -113,6 +120,7 @@ def test_get_connection_raises_when_database_url_missing(monkeypatch):
         query_data.get_connection()
 
 
+# Duplicate Decimal conversion test
 @pytest.mark.db
 def test_clean_value_converts_decimal():
     import query_data
@@ -122,6 +130,7 @@ def test_clean_value_converts_decimal():
     assert query_data._clean_value("x") == "x"
 
 
+# Test dict conversion structure and key presence
 @pytest.mark.db
 def test_query_applicants_as_dicts_uses_fetch_all_fn():
     import query_data
@@ -132,7 +141,6 @@ def test_query_applicants_as_dicts_uses_fetch_all_fn():
     ]
 
     def fake_fetch_all(sql: str):
-        # sanity: ensure expected SQL structure is used
         assert "FROM applicants" in sql
         assert "ORDER BY url ASC" in sql
         return fake_rows
@@ -140,7 +148,6 @@ def test_query_applicants_as_dicts_uses_fetch_all_fn():
     out = query_data.query_applicants_as_dicts(limit=2, fetch_all_fn=fake_fetch_all)
     assert len(out) == 2
 
-    # Must have the required keys
     expected_keys = {
         "url", "term", "status", "us_or_international", "gpa", "gre", "gre_v", "gre_aw",
         "degree", "program", "llm_generated_program", "llm_generated_university"
@@ -150,6 +157,7 @@ def test_query_applicants_as_dicts_uses_fetch_all_fn():
     assert out[1]["llm_generated_university"] == "Stanford"
 
 
+# Test labeled single-value output formatting
 @pytest.mark.db
 def test_run_query_single_value_with_label(monkeypatch, capsys):
     import query_data
@@ -165,6 +173,7 @@ def test_run_query_single_value_with_label(monkeypatch, capsys):
     assert "Applicant count: 123" in captured
 
 
+# Test multi-row formatting
 @pytest.mark.db
 def test_run_query_multi_row(monkeypatch, capsys):
     import query_data
@@ -185,6 +194,7 @@ def test_run_query_multi_row(monkeypatch, capsys):
     assert "Fall 2025 5.0" in out
 
 
+# Test multi-value labeled formatting
 @pytest.mark.db
 def test_run_query_multi_value_with_labels(capsys):
     import query_data
@@ -207,6 +217,7 @@ def test_run_query_multi_value_with_labels(capsys):
     assert "Average GRE:" in out
 
 
+# Test no-results message
 @pytest.mark.db
 def test_run_query_no_results_prints_message(capsys):
     import query_data
@@ -222,6 +233,7 @@ def test_run_query_no_results_prints_message(capsys):
     assert "No results" in out
 
 
+# Test successful get_connection path
 @pytest.mark.db
 def test_get_connection_success(monkeypatch):
     import query_data
@@ -236,7 +248,6 @@ def test_get_connection_success(monkeypatch):
             def close(self): ...
         return DummyConn()
 
-    # patch psycopg.connect used inside query_data
     monkeypatch.setattr(query_data.psycopg, "connect", fake_connect)
 
     conn = query_data.get_connection()
@@ -244,6 +255,7 @@ def test_get_connection_success(monkeypatch):
     conn.close()
 
 
+# Test single-value without label branch
 @pytest.mark.db
 def test_run_query_single_value_no_label(capsys):
     import query_data
@@ -258,6 +270,7 @@ def test_run_query_single_value_no_label(capsys):
     assert "777" in out
 
 
+# Test multi-value fallback branch when labels length mismatch
 @pytest.mark.db
 def test_run_query_multi_value_without_matching_labels_hits_else_branch(capsys):
     import query_data
@@ -267,17 +280,14 @@ def test_run_query_multi_value_without_matching_labels_hits_else_branch(capsys):
         def fetchone(self):
             return (1, 2, 3)
 
-    # multi_labels length != returned values length -> triggers else branch print(*cleaned)
     query_data.run_query(Cur(), title="t", sql="SELECT 1,2,3", multi_labels=["A", "B"])
     out = capsys.readouterr().out
     assert "1 2 3" in out
 
 
+# Test default fetch_all_fn import branch
 @pytest.mark.db
 def test_query_applicants_as_dicts_default_fetch_all_fn(monkeypatch):
-    """
-    Covers the branch where fetch_all_fn is None and it imports app.db.fetch_all.
-    """
     import query_data
     import app.db as app_db
 
@@ -292,12 +302,9 @@ def test_query_applicants_as_dicts_default_fetch_all_fn(monkeypatch):
     assert out[0]["llm_generated_university"] == "MIT"
 
 
+# Test __main__ guard execution safely
 @pytest.mark.db
 def test_query_data_module_main_guard_line(monkeypatch):
-    """
-    Covers the bottom 'if __name__ == "__main__"' line safely by running
-    the module as __main__ with get_connection patched so no real DB is used.
-    """
     import query_data
 
     class DummyCursor:
@@ -314,5 +321,4 @@ def test_query_data_module_main_guard_line(monkeypatch):
 
     monkeypatch.setattr(query_data, "get_connection", lambda: DummyConn())
 
-    # Run the module as "__main__" to hit the guard line
     runpy.run_module("query_data", run_name="__main__")

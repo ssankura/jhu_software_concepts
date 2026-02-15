@@ -1,75 +1,100 @@
 """
 app/pages/analysis.py
 
-This module defines the webpage routes responsible for displaying
-GradCafe analysis results.
+Flask routes for the GradCafe analytics web UI.
 
-Responsibilities:
-----------------
-• Execute SQL queries
-• Retrieve analytics data from PostgreSQL
-• Pass results to HTML templates
+This module is responsible for:
+- Rendering the Analysis page (GET /analysis)
+- Handling "Pull Data" requests (POST /pull-data)
+- Handling "Update Analysis" requests (POST /update-analysis)
+
+Design notes:
+- Uses dependency injection via `current_app.extensions["deps"]` so tests can
+  substitute fakes/mocks for database and ETL functions.
+- Uses a shared busy-state (`pull_state`) to prevent concurrent pull/update
+  operations (required by the assignment busy-gating rules).
+- Keeps formatting logic in helper functions to ensure consistent display,
+  especially for percentages (two decimals).
 """
-import subprocess
-import sys
-from pathlib import Path
-from flask import redirect, url_for, flash
-from flask import request, jsonify, redirect, url_for, flash, current_app
-
-from app.pages.pull_state import is_running, start, stop
 
 from decimal import Decimal
-from flask import render_template
 
-# Import Blueprint instance
+from flask import (
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
+
 from app.pages import pages_bp
-
-# Import database helper functions
-from app.db import fetch_one, fetch_all
-
-from flask import current_app, jsonify
 from app.pages.pull_state import is_running, start, stop
 
-from app.db import fetch_all, fetch_one
 
-def _fmt_pct(value) -> str:
-    """
-    Ensure percentage is always rendered with two decimals + a percent sign.
-    Accepts None/Decimal/int/float/str.
-    """
-    if value is None:
-        return "0.00%"
-    value = _convert_decimal(value)
-    try:
-        return f"{float(value):.2f}%"
-    except (TypeError, ValueError):
-        # if it's already a string like "12.34", still append %
-        s = str(value)
-        return s if s.endswith("%") else f"{s}%"
-
+# ---------------------------------------------------------------------------
+# Formatting helpers (kept here so the template stays simple and consistent)
+# ---------------------------------------------------------------------------
 
 def _convert_decimal(value):
     """
-    Helper function to convert Decimal objects into float values
-    so they display cleanly in HTML templates.
+    Convert Decimal values (from SQL numeric columns) into Python floats.
+
+    Why:
+        Jinja templates render Decimal fine, but converting to float produces
+        cleaner output and avoids surprises when formatting/serializing.
 
     Args:
-        value: Decimal or numeric value
+        value: Any Python value; commonly Decimal, int, float, or None.
 
     Returns:
-        float or original value
+        float if value is Decimal; otherwise returns the original value.
     """
     if isinstance(value, Decimal):
         return float(value)
     return value
 
 
+def _fmt_pct(value) -> str:
+    """
+    Format a numeric value as a percentage string with exactly two decimals.
+
+    Required by assignment:
+        - All percentages shown with two decimals (e.g., "39.28%")
+
+    Accepts:
+        None, Decimal, int, float, or str.
+
+    Returns:
+        str: formatted percentage with "%" suffix.
+    """
+    if value is None:
+        return "0.00%"
+
+    value = _convert_decimal(value)
+
+    # Primary path: numeric values
+    try:
+        return f"{float(value):.2f}%"
+    except (TypeError, ValueError):
+        # Fallback: if it is already a string, ensure it ends with "%"
+        s = str(value)
+        return s if s.endswith("%") else f"{s}%"
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
 @pages_bp.route("/")
 def home():
     """
-    Homepage route.
+    Home route.
 
-    Redirects users to the analysis page.
+    Redirects to the analysis page so the application has a single “main” UI.
+    Keeping this as a function (rather than an HTTP redirect) makes it easy
+    to test and keeps routing simple.
     """
     return analysis()
 
@@ -77,27 +102,39 @@ def home():
 @pages_bp.route("/analysis")
 def analysis():
     """
-    Main analysis webpage route.
+    Render the Analysis page.
 
-    Executes SQL queries required by Module 3 assignment
-    and sends results to the HTML template.
+    Responsibilities:
+    - Execute required SQL queries for the Module 3 analytics
+    - Package results into a dictionary used by the Jinja template
+    - Provide busy-state flag to disable/gate button actions in UI
+
+    Dependency injection:
+        `current_app.extensions["deps"]` must provide:
+        - fetch_one_fn(sql: str) -> scalar result
+        - fetch_all_fn(sql: str) -> list of rows
+
+    Returns:
+        Flask response rendering templates/analysis.html
     """
+    # Pull injected dependencies (tests can replace these with fakes)
     deps = current_app.extensions.get("deps", {})
     fetch_one = deps["fetch_one_fn"]
     fetch_all = deps["fetch_all_fn"]
 
-    # -------------------------------------------------
-    # Question 1: Number of Fall 2026 Applicants
-    # -------------------------------------------------
+    # -----------------------------------------------------------------------
+    # Q1: Number of Fall 2026 Applicants
+    # -----------------------------------------------------------------------
     q1_fall_2026_count = fetch_one("""
         SELECT COUNT(*)
         FROM applicants
         WHERE term = 'Fall 2026';
     """)
 
-    # -------------------------------------------------
-    # Question 2: Percentage of International Applicants
-    # -------------------------------------------------
+    # -----------------------------------------------------------------------
+    # Q2: Percentage of International Applicants
+    # Note: NULLIF avoids division by zero when table is empty.
+    # -----------------------------------------------------------------------
     q2_pct_international = fetch_one("""
         SELECT
           ROUND(
@@ -109,9 +146,10 @@ def analysis():
         WHERE us_or_international IS NOT NULL;
     """)
 
-    # -------------------------------------------------
-    # Question 3: Average GPA, GRE, GRE V, GRE AW
-    # -------------------------------------------------
+    # -----------------------------------------------------------------------
+    # Q3: Average GPA, GRE, GRE V, GRE AW
+    # fetch_all returns a list of rows; we take row[0] since this query returns 1 row.
+    # -----------------------------------------------------------------------
     q3_avgs = fetch_all("""
         SELECT
           ROUND(AVG(gpa)::numeric, 3),
@@ -121,9 +159,9 @@ def analysis():
         FROM applicants;
     """)[0]
 
-    # -------------------------------------------------
-    # Question 4: Avg GPA of American Students (Fall 2026)
-    # -------------------------------------------------
+    # -----------------------------------------------------------------------
+    # Q4: Avg GPA of American Students (Fall 2026)
+    # -----------------------------------------------------------------------
     q4_avg_gpa_american_fall_2026 = fetch_one("""
         SELECT ROUND(AVG(gpa)::numeric, 3)
         FROM applicants
@@ -132,9 +170,9 @@ def analysis():
           AND gpa IS NOT NULL;
     """)
 
-    # -------------------------------------------------
-    # Question 5: Acceptance % for Fall 2025
-    # -------------------------------------------------
+    # -----------------------------------------------------------------------
+    # Q5: Acceptance % for Fall 2025
+    # -----------------------------------------------------------------------
     q5_pct_accepted_fall_2025 = fetch_one("""
         SELECT
           ROUND(
@@ -146,9 +184,9 @@ def analysis():
         WHERE term = 'Fall 2025';
     """)
 
-    # -------------------------------------------------
-    # Question 6: Avg GPA of Accepted Applicants (Fall 2026)
-    # -------------------------------------------------
+    # -----------------------------------------------------------------------
+    # Q6: Avg GPA of Accepted Applicants (Fall 2026)
+    # -----------------------------------------------------------------------
     q6_avg_gpa_accepted_fall_2026 = fetch_one("""
         SELECT ROUND(AVG(gpa)::numeric, 3)
         FROM applicants
@@ -157,9 +195,9 @@ def analysis():
           AND gpa IS NOT NULL;
     """)
 
-    # -------------------------------------------------
-    # Question 7: JHU Masters Computer Science Applicants
-    # -------------------------------------------------
+    # -----------------------------------------------------------------------
+    # Q7: JHU Masters Computer Science Applicants (LLM normalized fields)
+    # -----------------------------------------------------------------------
     q7_jhu_ms_cs = fetch_one("""
         SELECT COUNT(*)
         FROM applicants
@@ -171,10 +209,9 @@ def analysis():
               );
     """)
 
-    # -------------------------------------------------
-    # Question 8: 2026 Accepted PhD CS Applicants at Top Universities
-    # (Using LLM generated fields)
-    # -------------------------------------------------
+    # -----------------------------------------------------------------------
+    # Q8: Accepted PhD CS Applicants (2026) at "Top" Universities (LLM fields)
+    # -----------------------------------------------------------------------
     q8_top_univ_phd_cs_accepted_2026 = fetch_one("""
         SELECT COUNT(*)
         FROM applicants
@@ -192,9 +229,9 @@ def analysis():
               );
     """)
 
-    # -------------------------------------------------
-    # Question 9: Same Query Using Raw Program Fields
-    # -------------------------------------------------
+    # -----------------------------------------------------------------------
+    # Q9: Same query using raw program fields (non-LLM fields)
+    # -----------------------------------------------------------------------
     q9_top_univ_phd_cs_accepted_2026_raw = fetch_one("""
         SELECT COUNT(*)
         FROM applicants
@@ -212,9 +249,9 @@ def analysis():
               );
     """)
 
-    # -------------------------------------------------
-    # Custom Question 1: Top 5 Programs for Fall 2026
-    # -------------------------------------------------
+    # -----------------------------------------------------------------------
+    # Custom Q10a: Top 5 Programs for Fall 2026
+    # -----------------------------------------------------------------------
     custom_top5_programs_fall_2026 = fetch_all("""
         SELECT program, COUNT(*) AS application_count
         FROM applicants
@@ -224,9 +261,9 @@ def analysis():
         LIMIT 5;
     """)
 
-    # -------------------------------------------------
-    # Custom Question 2: Avg GPA of International Applicants
-    # -------------------------------------------------
+    # -----------------------------------------------------------------------
+    # Custom Q10b: Avg GPA of International Applicants
+    # -----------------------------------------------------------------------
     custom_avg_gpa_international = fetch_one("""
         SELECT ROUND(AVG(gpa)::numeric, 3)
         FROM applicants
@@ -234,9 +271,7 @@ def analysis():
           AND gpa IS NOT NULL;
     """)
 
-    # -------------------------------------------------
-    # Package results into dictionary for HTML template
-    # -------------------------------------------------
+    # Package results for the template. Keeping keys stable is important for tests.
     results = {
         "q1_fall_2026_count": q1_fall_2026_count,
         "q2_pct_international": _fmt_pct(q2_pct_international),
@@ -254,34 +289,56 @@ def analysis():
         "q10b_avg_gpa_international": _convert_decimal(custom_avg_gpa_international),
     }
 
-    # Render HTML template with results
+    # Render template and include busy state so UI can disable/guard actions.
     return render_template(
         "analysis.html",
         results=results,
-        pull_running=is_running()
+        pull_running=is_running(),
     )
 
 
 @pages_bp.post("/pull-data", endpoint="pull_data_route")
 def pull_data():
-    # If a pull is already running, block this request
+    """
+    Handle "Pull Data" button action.
+
+    Busy-gating requirement:
+        - If a pull is already running, return 409 {"busy": True}
+
+    Dependency injection:
+        `current_app.extensions["deps"]` must provide:
+        - pull_data_fn() -> dict or int
+          - dict example: {"ok": True, "inserted": 123}
+          - int example: 123 (insert count)
+
+    Response type:
+        - For browser requests: redirects back to /analysis with a flash message.
+        - For JSON/API requests (tests): returns JSON payload.
+    """
+    # Reject new pulls while another pull is in progress.
     if is_running():
         return jsonify({"busy": True}), 409
 
     deps = current_app.extensions.get("deps", {})
     pull_data_fn = deps["pull_data_fn"]
 
+    # Start busy state before running ETL; always stop in finally.
     start()
     try:
         result = pull_data_fn()
+
+        # Normalize result into a predictable JSON shape for tests and UI.
         if not isinstance(result, dict):
             result = {"ok": True, "inserted": int(result) if result is not None else 0}
     except Exception as e:
+        # Convert exceptions into a structured JSON response (tests can assert this).
         result = {"ok": False, "error": str(e)}
     finally:
         stop()
 
-    # Return HTML redirect for browser, JSON for tests/API clients
+    # Decide response style using Accept headers:
+    # - Browser typically prefers HTML
+    # - Tests/API clients typically prefer JSON
     wants_html = request.accept_mimetypes.accept_html and not request.accept_mimetypes.accept_json
     if wants_html:
         if result.get("ok"):
@@ -295,12 +352,24 @@ def pull_data():
 
 @pages_bp.post("/update-analysis")
 def update_analysis():
+    """
+    Handle "Update Analysis" button action.
+
+    Busy-gating requirement:
+        - If a pull is in progress, return 409 {"busy": True} and do no work.
+
+    Dependency injection:
+        `current_app.extensions["deps"]` may provide:
+        - update_analysis_fn() -> None
+          If not provided, defaults to a no-op to keep the route stable in tests.
+    """
     if is_running():
         return jsonify({"busy": True}), 409
 
     deps = current_app.extensions.get("deps", {})
     update_analysis_fn = deps.get("update_analysis_fn", lambda: None)
+
+    # Any analysis refresh/recompute logic should live in update_analysis_fn.
     update_analysis_fn()
 
     return jsonify({"ok": True}), 200
-

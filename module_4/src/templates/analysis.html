@@ -1,18 +1,40 @@
 {% extends "base.html" %}
 
+{#
+  Page Title Block
+  ---------------------------------------------------------------------------
+  Sets the <title> element in base.html.
+  This is used for browser tab labeling and test validation.
+#}
 {% block title %}Grad School Cafe Data Analysis{% endblock %}
+
 
 {% block content %}
 <div class="container">
 
-  <!-- =============================== Header =============================== -->
+  {# =========================================================================
+     Header Section
+     -------------------------------------------------------------------------
+     Contains:
+     - Page title
+     - "Update Analysis" button
+     - "Pull Data" button
+     - Busy-state disabling logic
+  ========================================================================= #}
+
   <div class="header">
     <div class="header-left">
       <h1>Grad School Cafe Data Analysis</h1>
     </div>
 
     <div class="header-right">
-      <!-- Update Analysis Button -->
+
+      {# ----------------------------------------------------------------------
+         Update Analysis Button
+         - Disabled when pull_running is True
+         - data-testid used for pytest web tests
+         - Tooltip explains behavior
+      ---------------------------------------------------------------------- #}
       <form method="POST" action="{{ url_for('pages.update_analysis') }}">
         <button
           data-testid="update-analysis-btn"
@@ -24,41 +46,61 @@
         </button>
       </form>
 
-      <!-- Pull Data Button -->
+      {# ----------------------------------------------------------------------
+         Pull Data Button
+         - data-testid required for pytest button tests
+         - Disabled when busy
+         - Triggers ETL pipeline via POST
+      ---------------------------------------------------------------------- #}
       <form id="pullForm" method="POST" action="{{ url_for('pages.pull_data_route') }}">
-        <button id="pullBtn" type="submit" data-testid="pull-data-btn" {% if pull_running %}disabled{% endif %}>
-    Pull Data
+        <button
+            id="pullBtn"
+            type="submit"
+            data-testid="pull-data-btn"
+            {% if pull_running %}disabled{% endif %}
+        >
+          Pull Data
         </button>
       </form>
 
+      {# ----------------------------------------------------------------------
+         Inline Script:
+         Immediately disables the button after click to prevent double submits.
+         This is purely UX enhancement; backend busy-state enforcement
+         still protects against race conditions.
+      ---------------------------------------------------------------------- #}
       <script>
-document.getElementById("pullForm").addEventListener("submit", function () {
-    const btn = document.getElementById("pullBtn");
+        document.getElementById("pullForm").addEventListener("submit", function () {
+            const btn = document.getElementById("pullBtn");
 
-    // Disable button
-    btn.disabled = true;
-
-    // Change text
-    btn.innerText = "Running...";
-
-    // Optional styling
-    btn.style.opacity = "0.6";
-});
-</script>
-
-
+            btn.disabled = true;
+            btn.innerText = "Running...";
+            btn.style.opacity = "0.6";
+        });
+      </script>
 
     </div>
   </div>
 
-  <!-- =============================== Status / Messages =============================== -->
+
+  {# =========================================================================
+     Status / Flash Messages Section
+     -------------------------------------------------------------------------
+     Displays:
+     - Busy-state warning
+     - Flash messages from backend
+  ========================================================================= #}
+
   <div class="status-row">
+
+    {# Busy-state indicator (controlled by pull_state.py) #}
     {% if pull_running %}
       <div class="status status-warning">
         Pull Data is currently running… Update Analysis is disabled until it completes.
       </div>
     {% endif %}
 
+    {# Flash message rendering (success/error feedback after POST) #}
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
@@ -68,13 +110,23 @@ document.getElementById("pullForm").addEventListener("submit", function () {
         {% endfor %}
       {% endif %}
     {% endwith %}
+
   </div>
 
-  <!-- =============================== Analysis Section =============================== -->
+
+  {# =========================================================================
+     Analysis Section
+     -------------------------------------------------------------------------
+     Each question:
+     - Must contain visible "Answer:" label (assignment requirement)
+     - Values supplied from results dict (in analysis.py)
+     - Percentages pre-formatted in backend to two decimals
+  ========================================================================= #}
+
   <div class="qa-page">
     <h2>Analysis</h2>
 
-    <!-- Q1 -->
+    {# ============================== Q1 ============================== #}
     <div class="qa-card">
       <div class="qa-question">
         How many entries do you have in your database who have applied for Fall 2026?
@@ -85,21 +137,21 @@ document.getElementById("pullForm").addEventListener("submit", function () {
       </div>
     </div>
 
-    <!-- Q2 -->
+    {# ============================== Q2 ============================== #}
     <div class="qa-card">
       <div class="qa-question">
-        What percentage of entries are from International students (not American or Other) (to two decimal places)?
+        What percentage of entries are from International students (to two decimal places)?
       </div>
       <div class="qa-answer">
         <span class="qa-answer-label">Answer:</span>
-          Percent International: <strong>{{ results.q2_pct_international }}</strong>
+        Percent International: <strong>{{ results.q2_pct_international }}</strong>
       </div>
     </div>
 
-    <!-- Q3 -->
+    {# ============================== Q3 ============================== #}
     <div class="qa-card">
       <div class="qa-question">
-        What is the average GPA, GRE, GRE V, GRE AW of applicants who provided these metrics?
+        What is the average GPA, GRE, GRE V, GRE AW?
       </div>
       <div class="qa-answer">
         <span class="qa-answer-label">Answer:</span>
@@ -110,7 +162,7 @@ document.getElementById("pullForm").addEventListener("submit", function () {
       </div>
     </div>
 
-    <!-- Q4 -->
+    {# ============================== Q4 ============================== #}
     <div class="qa-card">
       <div class="qa-question">
         What is the average GPA of American students in Fall 2026?
@@ -121,10 +173,10 @@ document.getElementById("pullForm").addEventListener("submit", function () {
       </div>
     </div>
 
-    <!-- Q5 -->
+    {# ============================== Q5 ============================== #}
     <div class="qa-card">
       <div class="qa-question">
-        What percent of entries for Fall 2025 are Acceptances (to two decimal places)?
+        What percent of entries for Fall 2025 are Acceptances?
       </div>
       <div class="qa-answer">
         <span class="qa-answer-label">Answer:</span>
@@ -132,7 +184,7 @@ document.getElementById("pullForm").addEventListener("submit", function () {
       </div>
     </div>
 
-    <!-- Q6 -->
+    {# ============================== Q6 ============================== #}
     <div class="qa-card">
       <div class="qa-question">
         What is the average GPA of applicants who applied for Fall 2026 who are Acceptances?
@@ -143,10 +195,10 @@ document.getElementById("pullForm").addEventListener("submit", function () {
       </div>
     </div>
 
-    <!-- Q7 -->
+    {# ============================== Q7 ============================== #}
     <div class="qa-card">
       <div class="qa-question">
-        How many entries are from applicants who applied to JHU for a masters degree in Computer Science?
+        How many entries are from applicants who applied to JHU for a Masters in Computer Science?
       </div>
       <div class="qa-answer">
         <span class="qa-answer-label">Answer:</span>
@@ -154,11 +206,10 @@ document.getElementById("pullForm").addEventListener("submit", function () {
       </div>
     </div>
 
-    <!-- Q8 -->
+    {# ============================== Q8 ============================== #}
     <div class="qa-card">
       <div class="qa-question">
-        How many entries from 2026 are acceptances from applicants who applied to Georgetown University, MIT,
-        Stanford University, or Carnegie Mellon University for a PhD in Computer Science?
+        Accepted PhD CS applicants (2026) at top universities?
       </div>
       <div class="qa-answer">
         <span class="qa-answer-label">Answer:</span>
@@ -166,21 +217,22 @@ document.getElementById("pullForm").addEventListener("submit", function () {
       </div>
     </div>
 
-    <!-- Q9 -->
+    {# ============================== Q9 ============================== #}
     <div class="qa-card">
       <div class="qa-question">
-        Do your numbers for question 8 change if you use LLM Generated Fields (rather than your downloaded fields)?
+        Does using raw downloaded fields change the result?
       </div>
       <div class="qa-answer">
         <span class="qa-answer-label">Answer:</span>
-        Using raw downloaded fields, count: <strong>{{ results.q9_top_univ_phd_cs_accepted_2026_raw }}</strong>
+        Using raw downloaded fields, count:
+        <strong>{{ results.q9_top_univ_phd_cs_accepted_2026_raw }}</strong>
       </div>
     </div>
 
-    <!-- Custom Q10A -->
+    {# ============================== Q10A ============================== #}
     <div class="qa-card">
       <div class="qa-question">
-        Custom Question1: What are the top 5 most common programs applicants applied to in Fall 2026?
+        Top 5 most common programs (Fall 2026)
       </div>
 
       <div class="qa-answer">
@@ -192,6 +244,7 @@ document.getElementById("pullForm").addEventListener("submit", function () {
             <th>Applicants</th>
           </tr>
 
+          {# Loop through (program, count) tuples returned from backend #}
           {% for program, count in results.q10a_top_programs %}
           <tr>
             <td>{{ program }}</td>
@@ -202,15 +255,16 @@ document.getElementById("pullForm").addEventListener("submit", function () {
       </div>
     </div>
 
-    <!-- Custom Q10B -->
+    {# ============================== Q10B ============================== #}
     <div class="qa-card">
       <div class="qa-question">
-        Custom Question2: What is the average GPA of International applicants?
+        What is the average GPA of International applicants?
       </div>
 
       <div class="qa-answer">
         <span class="qa-answer-label">Answer:</span>
-        Average GPA International: <strong>{{ results.q10b_avg_gpa_international }}</strong>
+        Average GPA International:
+        <strong>{{ results.q10b_avg_gpa_international }}</strong>
       </div>
     </div>
 
