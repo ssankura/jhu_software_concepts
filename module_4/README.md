@@ -264,6 +264,19 @@ Generated HTML files are located under:
 
     module_4/docs/build/html/
 
+## Read the Docs Hosting Note
+
+The Github repository is private as required for course submission.
+
+The free Read the Docs (Community) service does not support building documentation from private GitHub repositories. Because of this limitation, automated publishing to readthedocs.org was not possible.
+
+However, the complete Sphinx-generated HTML documentation is included in this repository under:
+
+module_4/docs/build/html/
+
+This satisfies the Module 4 documentation requirement.
+
+
 ---
 
 ## Final Status
