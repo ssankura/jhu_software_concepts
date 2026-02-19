@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pull_data.lock
+.coverage
+.pytest_cache/
+*.log
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/

@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+
+{#
+  Page Title Block
+  ---------------------------------------------------------------------------
+  Sets the <title> element in base.html.
+  This is used for browser tab labeling and test validation.
+#}
+{% block title %}Grad School Cafe Data Analysis{% endblock %}
+
+
+{% block content %}
+<div class="container">
+
+  {# =========================================================================
+     Header Section
+     -------------------------------------------------------------------------
+     Contains:
+     - Page title
+     - "Update Analysis" button
+     - "Pull Data" button
+     - Busy-state disabling logic
+  ========================================================================= #}
+
+  <div class="header">
+    <div class="header-left">
+      <h1>Grad School Cafe Data Analysis</h1>
+    </div>
+
+    <div class="header-right">
+
+      {# ----------------------------------------------------------------------
+         Update Analysis Button
+         - Disabled when pull_running is True
+         - data-testid used for pytest web tests
+         - Tooltip explains behavior
+      ---------------------------------------------------------------------- #}
+      <form method="POST" action="{{ url_for('pages.update_analysis') }}">
+        <button
+          data-testid="update-analysis-btn"
+          class="btn btn-secondary tooltip"
+          data-tooltip="Refreshes this page using the newest database results. Disabled while Pull Data is running."
+          {% if pull_running %}disabled{% endif %}
+        >
+          Update Analysis
+        </button>
+      </form>
+
+      {# ----------------------------------------------------------------------
+         Pull Data Button
+         - data-testid required for pytest button tests
+         - Disabled when busy
+         - Triggers ETL pipeline via POST
+      ---------------------------------------------------------------------- #}
+      <form id="pullForm" method="POST" action="{{ url_for('pages.pull_data_route') }}">
+        <button
+            id="pullBtn"
+            type="submit"
+            data-testid="pull-data-btn"
+            {% if pull_running %}disabled{% endif %}
+        >
+          Pull Data
+        </button>
+      </form>
+
+      {# ----------------------------------------------------------------------
+         Inline Script:
+         Immediately disables the button after click to prevent double submits.
+         This is purely UX enhancement; backend busy-state enforcement
+         still protects against race conditions.
+      ---------------------------------------------------------------------- #}
+      <script>
+        document.getElementById("pullForm").addEventListener("submit", function () {
+            const btn = document.getElementById("pullBtn");
+
+            btn.disabled = true;
+            btn.innerText = "Running...";
+            btn.style.opacity = "0.6";
+        });
+      </script>
+
+    </div>
+  </div>
+
+
+  {# =========================================================================
+     Status / Flash Messages Section
+     -------------------------------------------------------------------------
+     Displays:
+     - Busy-state warning
+     - Flash messages from backend
+  ========================================================================= #}
+
+  <div class="status-row">
+
+    {# Busy-state indicator (controlled by pull_state.py) #}
+    {% if pull_running %}
+      <div class="status status-warning">
+        Pull Data is currently running… Update Analysis is disabled until it completes.
+      </div>
+    {% endif %}
+
+    {# Flash message rendering (success/error feedback after POST) #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="status {% if category == 'warning' %}status-warning{% else %}status-ok{% endif %}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+  </div>
+
+
+  {# =========================================================================
+     Analysis Section
+     -------------------------------------------------------------------------
+     Each question:
+     - Must contain visible "Answer:" label (assignment requirement)
+     - Values supplied from results dict (in analysis.py)
+     - Percentages pre-formatted in backend to two decimals
+  ========================================================================= #}
+
+  <div class="qa-page">
+    <h2>Analysis</h2>
+
+    {# ============================== Q1 ============================== #}
+    <div class="qa-card">
+      <div class="qa-question">
+        How many entries do you have in your database who have applied for Fall 2026?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Applicant count: <strong>{{ results.q1_fall_2026_count }}</strong>
+      </div>
+    </div>
+
+    {# ============================== Q2 ============================== #}
+    <div class="qa-card">
+      <div class="qa-question">
+        What percentage of entries are from International students (to two decimal places)?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Percent International: <strong>{{ results.q2_pct_international }}</strong>
+      </div>
+    </div>
+
+    {# ============================== Q3 ============================== #}
+    <div class="qa-card">
+      <div class="qa-question">
+        What is the average GPA, GRE, GRE V, GRE AW?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Average GPA: <strong>{{ results.q3_avg_gpa }}</strong>,
+        Average GRE: <strong>{{ results.q3_avg_gre }}</strong>,
+        Average GRE V: <strong>{{ results.q3_avg_gre_v }}</strong>,
+        Average GRE AW: <strong>{{ results.q3_avg_gre_aw }}</strong>
+      </div>
+    </div>
+
+    {# ============================== Q4 ============================== #}
+    <div class="qa-card">
+      <div class="qa-question">
+        What is the average GPA of American students in Fall 2026?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Average GPA American: <strong>{{ results.q4_avg_gpa_american_fall_2026 }}</strong>
+      </div>
+    </div>
+
+    {# ============================== Q5 ============================== #}
+    <div class="qa-card">
+      <div class="qa-question">
+        What percent of entries for Fall 2025 are Acceptances?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Acceptance percent: <strong>{{ results.q5_pct_accepted_fall_2025 }}</strong>
+      </div>
+    </div>
+
+    {# ============================== Q6 ============================== #}
+    <div class="qa-card">
+      <div class="qa-question">
+        What is the average GPA of applicants who applied for Fall 2026 who are Acceptances?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Average GPA Acceptance: <strong>{{ results.q6_avg_gpa_accepted_fall_2026 }}</strong>
+      </div>
+    </div>
+
+    {# ============================== Q7 ============================== #}
+    <div class="qa-card">
+      <div class="qa-question">
+        How many entries are from applicants who applied to JHU for a Masters in Computer Science?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        JHU Masters Computer Science count: <strong>{{ results.q7_jhu_ms_cs }}</strong>
+      </div>
+    </div>
+
+    {# ============================== Q8 ============================== #}
+    <div class="qa-card">
+      <div class="qa-question">
+        Accepted PhD CS applicants (2026) at top universities?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Count: <strong>{{ results.q8_top_univ_phd_cs_accepted_2026 }}</strong>
+      </div>
+    </div>
+
+    {# ============================== Q9 ============================== #}
+    <div class="qa-card">
+      <div class="qa-question">
+        Does using raw downloaded fields change the result?
+      </div>
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Using raw downloaded fields, count:
+        <strong>{{ results.q9_top_univ_phd_cs_accepted_2026_raw }}</strong>
+      </div>
+    </div>
+
+    {# ============================== Q10A ============================== #}
+    <div class="qa-card">
+      <div class="qa-question">
+        Top 5 most common programs (Fall 2026)
+      </div>
+
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+
+        <table>
+          <tr>
+            <th>Program</th>
+            <th>Applicants</th>
+          </tr>
+
+          {# Loop through (program, count) tuples returned from backend #}
+          {% for program, count in results.q10a_top_programs %}
+          <tr>
+            <td>{{ program }}</td>
+            <td>{{ count }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+
+    {# ============================== Q10B ============================== #}
+    <div class="qa-card">
+      <div class="qa-question">
+        What is the average GPA of International applicants?
+      </div>
+
+      <div class="qa-answer">
+        <span class="qa-answer-label">Answer:</span>
+        Average GPA International:
+        <strong>{{ results.q10b_avg_gpa_international }}</strong>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

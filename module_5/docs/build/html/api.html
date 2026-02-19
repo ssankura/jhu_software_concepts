@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+
+<html lang="English" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>API Reference &#8212; GradCafe Analytics 1.3 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=b7e9ff8f"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Testing Guide" href="testing.html" />
+    <link rel="prev" title="Architecture" href="architecture.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="api-reference">
+<h1>API Reference<a class="headerlink" href="#api-reference" title="Link to this heading">¶</a></h1>
+<p>This section is generated automatically from Python docstrings using
+Sphinx autodoc.</p>
+<p>It documents the core ETL modules, database helpers, and Flask
+application routes used in the GradCafe Analytics project.</p>
+<section id="core-etl-modules">
+<h2>Core ETL Modules<a class="headerlink" href="#core-etl-modules" title="Link to this heading">¶</a></h2>
+<section id="pull-data-py">
+<h3>pull_data.py<a class="headerlink" href="#pull-data-py" title="Link to this heading">¶</a></h3>
+<p>Responsible for orchestrating the data pipeline:
+- Scrapes GradCafe data
+- Cleans and transforms records
+- Loads them into the database</p>
+<p id="module-pull_data">pull_data.py</p>
+<p>Orchestrates the full GradCafe ETL pipeline:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>Scrape new data  (module_2/scrape.py)</p></li>
+<li><p>Clean raw data   (module_2/clean.py)</p></li>
+<li><p>Standardize/LLM  (module_2/standardize_merge.py)</p></li>
+<li><p>Load into DB     (module_3/load_data.py)</p></li>
+</ol>
+</div></blockquote>
+<p>This script is intended to be launched by Flask via subprocess.</p>
+<section id="design-goals">
+<h4>Design Goals:<a class="headerlink" href="#design-goals" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Keep the web layer (Flask routes) thin and orchestration-free.</p></li>
+<li><p>Execute ETL stages sequentially with clear logging.</p></li>
+<li><p>Fail fast if any stage fails.</p></li>
+<li><p>Ensure idempotent DB loads (handled by load_data.py UNIQUE constraint).</p></li>
+<li><p>Always release busy-state lock even if errors occur.</p></li>
+</ul>
+</section>
+<section id="important">
+<h4>Important:<a class="headerlink" href="#important" title="Link to this heading">¶</a></h4>
+<p>This script assumes DATABASE_URL is set in the environment.</p>
+</section>
+<dl class="py function">
+<dt class="sig sig-object py" id="pull_data.main">
+<span class="sig-prename descclassname"><span class="pre">pull_data.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="reference internal" href="_modules/pull_data.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pull_data.main" title="Link to this definition">¶</a></dt>
+<dd><p>Execute the full Pull Data pipeline.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Exit code (0 = success, non-zero = failure)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>int</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Flow:</dt><dd><p>scrape → clean → standardize_merge → load_data</p>
+</dd>
+<dt>Error Handling:</dt><dd><ul class="simple">
+<li><p>If any step returns non-zero, abort immediately.</p></li>
+<li><p>Print user-friendly message for Flask logs.</p></li>
+<li><p>Lock is released in finally block.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="load-data-py">
+<h3>load_data.py<a class="headerlink" href="#load-data-py" title="Link to this heading">¶</a></h3>
+<p>Handles inserting cleaned data into PostgreSQL.</p>
+<p>Responsibilities:
+- Insert applicants into DB
+- Enforce idempotency via ON CONFLICT
+- Return inserted row counts</p>
+<p id="module-load_data">load_data.py</p>
+<p>Loads cleaned GradCafe applicant data from a JSON file into a PostgreSQL database
+using psycopg.</p>
+<section id="module-3-4-requirements-satisfied">
+<h4>Module 3/4 Requirements Satisfied:<a class="headerlink" href="#module-3-4-requirements-satisfied" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Uses Python + psycopg to load data into PostgreSQL (no manual psql import)</p></li>
+<li><p>Creates the <cite>applicants</cite> table if it does not exist</p></li>
+<li><p>Inserts records in batches for performance and determinism</p></li>
+<li><p>Prevents duplicate entries using a UNIQUE constraint on <cite>url</cite>
+(idempotent re-runs and repeated Pull Data do not create duplicates)</p></li>
+</ul>
+</section>
+<section id="run">
+<h4>Run:<a class="headerlink" href="#run" title="Link to this heading">¶</a></h4>
+<blockquote>
+<div><p>export DATABASE_URL=&quot;postgresql://&lt;user&gt;:&lt;pass&gt;&#64;localhost:5432/gradcafe&quot;
+python3 load_data.py --file applicant_data.json</p>
+</div></blockquote>
+</section>
+<section id="operational-notes">
+<h4>Operational Notes:<a class="headerlink" href="#operational-notes" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Writes timestamped logs to both console and load_data.log</p></li>
+<li><p>Skips records without a URL because url is the uniqueness key</p></li>
+<li><p>Uses <cite>ON CONFLICT (url) DO NOTHING</cite> for safe idempotency</p></li>
+</ul>
+</section>
+<dl class="py function">
+<dt class="sig sig-object py" id="load_data.clean_date">
+<span class="sig-prename descclassname"><span class="pre">load_data.</span></span><span class="sig-name descname"><span class="pre">clean_date</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">date</span> <span class="pre">|</span> <span class="pre">None</span></span></span><a class="reference internal" href="_modules/load_data.html#clean_date"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#load_data.clean_date" title="Link to this definition">¶</a></dt>
+<dd><p>Parse a date string into a <cite>datetime.date</cite>.</p>
+<p>Supports common GradCafe-style formats. Returns None if parsing fails.</p>
+<dl class="simple">
+<dt>Why:</dt><dd><p>Dates often appear in multiple formats depending on scraper version or site.
+Standardizing to DATE ensures consistent queries and schema correctness.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="load_data.clean_float">
+<span class="sig-prename descclassname"><span class="pre">load_data.</span></span><span class="sig-name descname"><span class="pre">clean_float</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="_modules/load_data.html#clean_float"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#load_data.clean_float" title="Link to this definition">¶</a></dt>
+<dd><p>Normalize numeric fields as floats.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float if conversion succeeds, otherwise None.</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Why:</dt><dd><p>Scraped numeric fields can arrive as strings (&quot;320&quot;) or be malformed.
+Returning None avoids insert failures and keeps downstream SQL stable.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="load_data.clean_text">
+<span class="sig-prename descclassname"><span class="pre">load_data.</span></span><span class="sig-name descname"><span class="pre">clean_text</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="_modules/load_data.html#clean_text"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#load_data.clean_text" title="Link to this definition">¶</a></dt>
+<dd><p>Normalize text fields.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>Stripped string for non-empty input</p></li>
+<li><p>None for None, empty, or whitespace-only input</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Why:</dt><dd><p>Treating &quot;&quot; and &quot;   &quot; as None prevents storing meaningless values in DB.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="load_data.create_table">
+<span class="sig-prename descclassname"><span class="pre">load_data.</span></span><span class="sig-name descname"><span class="pre">create_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">conn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Connection</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/load_data.html#create_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#load_data.create_table" title="Link to this definition">¶</a></dt>
+<dd><p>Create the applicants table and a UNIQUE index on url if missing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>conn</strong> -- Active psycopg connection (transaction managed by context manager).</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Why:</dt><dd><p>Ensures the loader can run on a fresh database (CI, new dev machine)
+without requiring manual setup.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="load_data.load_data">
+<span class="sig-prename descclassname"><span class="pre">load_data.</span></span><span class="sig-name descname"><span class="pre">load_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">json_file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/load_data.html#load_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#load_data.load_data" title="Link to this definition">¶</a></dt>
+<dd><p>Load JSON records into PostgreSQL.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>json_file</strong> -- Path to the cleaned JSON file.</p></li>
+<li><p><strong>batch_size</strong> -- Number of records inserted per batch commit.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Why batching:</dt><dd><ul class="simple">
+<li><p>Faster inserts than per-row commits</p></li>
+<li><p>More deterministic performance for CI</p></li>
+<li><p>Lower transaction overhead</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="load_data.load_json">
+<span class="sig-prename descclassname"><span class="pre">load_data.</span></span><span class="sig-name descname"><span class="pre">load_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/load_data.html#load_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#load_data.load_json" title="Link to this definition">¶</a></dt>
+<dd><p>Load a JSON file and return a list of dictionary records.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>path</strong> -- File path to the JSON file.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Valid JSON objects only.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list[dict]</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>ValueError</strong> -- If JSON root is not a list (assignment expects list of records).</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="load_data.main">
+<span class="sig-prename descclassname"><span class="pre">load_data.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/load_data.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#load_data.main" title="Link to this definition">¶</a></dt>
+<dd><p>Parse CLI args and run the loader.</p>
+<p>This exists so the loader can be executed:
+- locally from terminal
+- in CI scripts
+- in Makefile targets (if added later)</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="load_data.map_record">
+<span class="sig-prename descclassname"><span class="pre">load_data.</span></span><span class="sig-name descname"><span class="pre">map_record</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">record</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/load_data.html#map_record"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#load_data.map_record" title="Link to this definition">¶</a></dt>
+<dd><p>Map a raw JSON record into a normalized dict matching DB columns.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>record</strong> -- One JSON object representing an applicant row.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>dict with keys matching INSERT statement placeholders.</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>URL is treated as the uniqueness key.
+Records missing URL are skipped by the loader.</p>
+</dd></dl>
+
+</section>
+<section id="query-data-py">
+<h3>query_data.py<a class="headerlink" href="#query-data-py" title="Link to this heading">¶</a></h3>
+<p>Provides reusable SQL query helpers for analytics.</p>
+<p>Responsibilities:
+- Execute analytics queries
+- Return aggregate values
+- Support reporting layer</p>
+<p id="module-query_data">query_data.py</p>
+<p>Module 3/4 - Querying PostgreSQL (GradCafe dataset)</p>
+<p>This module supports two use cases:</p>
+<ol class="arabic">
+<li><p>CLI reporting (Module 3):
+- Connects to PostgreSQL via DATABASE_URL
+- Runs the required SQL analytics queries
+- Prints results in a screenshot-friendly format</p></li>
+<li><p>Testability support (Module 4):
+- Exposes <cite>query_applicants_as_dicts()</cite> which returns rows as dictionaries</p>
+<blockquote>
+<div><p>with stable keys used by templates/tests.</p>
+</div></blockquote>
+</li>
+</ol>
+<section id="how-to-run-cli">
+<h4>How to run (CLI):<a class="headerlink" href="#how-to-run-cli" title="Link to this heading">¶</a></h4>
+<p>export DATABASE_URL=&quot;postgresql://graduser:grad123&#64;localhost:5432/gradcafe&quot;
+python3 query_data.py</p>
+</section>
+<section id="design-notes">
+<h4>Design Notes:<a class="headerlink" href="#design-notes" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Uses psycopg for PostgreSQL connectivity.</p></li>
+<li><p>Uses defensive formatting for Decimal outputs (common for numeric SQL types).</p></li>
+<li><p>Keeps query printing logic in <cite>run_query()</cite> so each question stays readable.</p></li>
+</ul>
+</section>
+<dl class="py function">
+<dt class="sig sig-object py" id="query_data.get_connection">
+<span class="sig-prename descclassname"><span class="pre">query_data.</span></span><span class="sig-name descname"><span class="pre">get_connection</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/query_data.html#get_connection"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#query_data.get_connection" title="Link to this definition">¶</a></dt>
+<dd><p>Create and return a psycopg connection using DATABASE_URL.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>An open database connection.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>psycopg.Connection</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ValueError</strong> -- If DATABASE_URL environment variable is not set.</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Why:</dt><dd><p>Using DATABASE_URL keeps configuration portable across:
+- local dev
+- GitHub Actions CI
+- Read the Docs / documentation examples</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="query_data.main">
+<span class="sig-prename descclassname"><span class="pre">query_data.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/query_data.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#query_data.main" title="Link to this definition">¶</a></dt>
+<dd><p>Run the required Module 3 SQL analytics queries and print results.</p>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>Output is console-based (for assignment screenshots).</p></li>
+<li><p>The Flask web UI performs similar queries but renders via templates.</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="query_data.query_applicants_as_dicts">
+<span class="sig-prename descclassname"><span class="pre">query_data.</span></span><span class="sig-name descname"><span class="pre">query_applicants_as_dicts</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fetch_all_fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/query_data.html#query_applicants_as_dicts"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#query_data.query_applicants_as_dicts" title="Link to this definition">¶</a></dt>
+<dd><p>Return applicants as a list of dicts using the required schema keys.</p>
+<p>This function exists primarily for Module 4 testing, where tests need to:
+- verify inserted rows exist
+- validate required columns are present
+- validate uniqueness/idempotency behavior</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>limit</strong> -- Maximum number of rows to return (default: 10).</p></li>
+<li><p><strong>fetch_all_fn</strong> -- Optional injected dependency for fetching rows.
+If None, defaults to app.db.fetch_all.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of dict rows with stable keys.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list[dict[str, Any]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="query_data.run_query">
+<span class="sig-prename descclassname"><span class="pre">query_data.</span></span><span class="sig-name descname"><span class="pre">run_query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sql</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multi_labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/query_data.html#run_query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#query_data.run_query" title="Link to this definition">¶</a></dt>
+<dd><p>Execute SQL query and print results in a screenshot-style output.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cursor</strong> -- psycopg cursor object.</p></li>
+<li><p><strong>title</strong> -- Human-readable title for the query (kept for readability).</p></li>
+<li><p><strong>sql</strong> -- SQL query string.</p></li>
+<li><p><strong>multi</strong> -- True if the query returns multiple rows.</p></li>
+<li><p><strong>label</strong> -- Label for single-value outputs (e.g., &quot;Applicant count&quot;).</p></li>
+<li><p><strong>multi_labels</strong> -- Labels for multi-column single-row outputs (e.g., averages).</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>This function prints to console (for Module 3 screenshots).</p></li>
+<li><p>Web UI rendering is handled separately by Flask routes/templates.</p></li>
+</ul>
+</dd></dl>
+
+</section>
+</section>
+<section id="flask-application-web-layer">
+<h2>Flask Application &amp; Web Layer<a class="headerlink" href="#flask-application-web-layer" title="Link to this heading">¶</a></h2>
+<section id="app-package-create-app-factory">
+<h3>app package (create_app factory)<a class="headerlink" href="#app-package-create-app-factory" title="Link to this heading">¶</a></h3>
+<p>Defines the Flask application factory using dependency injection.</p>
+<p>Responsibilities:
+- Register blueprints
+- Inject scraper/loader/update dependencies
+- Configure testing hooks</p>
+<p id="module-app.__init__">app/__init__.py</p>
+<p>Flask application factory for Module 4.</p>
+<p>This module implements the Flask &quot;application factory&quot; pattern,
+which is required for:</p>
+<ul class="simple">
+<li><p>Testability (each test can create an isolated app instance)</p></li>
+<li><p>Dependency injection (swap real DB/scraper with fakes)</p></li>
+<li><p>Clean separation between configuration and runtime state</p></li>
+<li><p>CI compatibility</p></li>
+</ul>
+<section id="assignment-requirements-satisfied">
+<h4>Assignment Requirements Satisfied:<a class="headerlink" href="#assignment-requirements-satisfied" title="Link to this heading">¶</a></h4>
+<p>✔ Expose create_app(...) factory
+✔ Support dependency injection for scraper/loader/update-analysis
+✔ Register blueprint routes
+✔ Use DATABASE_URL for DB access (via app.db)</p>
+</section>
+<dl class="py class">
+<dt class="sig sig-object py" id="app.__init__.BusyState">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">app.__init__.</span></span><span class="sig-name descname"><span class="pre">BusyState</span></span><a class="reference internal" href="_modules/app/__init__.html#BusyState"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.__init__.BusyState" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Observable busy flag placeholder.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Actual busy-state logic is implemented in pull_state.py using a
+lock-file mechanism.</p>
+</div>
+<p>This class exists primarily to make busy-state observable/testable
+in higher-level architecture if needed in the future.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="app.__init__.create_app">
+<span class="sig-prename descclassname"><span class="pre">app.__init__.</span></span><span class="sig-name descname"><span class="pre">create_app</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">test_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">deps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Flask</span></span></span><a class="reference internal" href="_modules/app/__init__.html#create_app"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.__init__.create_app" title="Link to this definition">¶</a></dt>
+<dd><p>Create and configure a Flask application instance.</p>
+<p>This function follows the Flask application factory pattern,
+allowing multiple independent app instances to be created
+(critical for pytest isolation).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>test_config</strong> (<em>dict</em><em>, </em><em>optional</em>) -- <p>Configuration overrides used during testing.
+.. rubric:: Example</p>
+<p>{&quot;TESTING&quot;: True}</p>
+</p></li>
+<li><p><strong>deps</strong> (<em>dict</em><em>, </em><em>optional</em>) -- <dl class="simple">
+<dt>Dependency injection container. Tests can inject:</dt><dd><ul>
+<li><p>scraper_fn</p></li>
+<li><p>loader_fn</p></li>
+<li><p>update_analysis_fn</p></li>
+<li><p>pull_data_fn</p></li>
+<li><p>fetch_one_fn</p></li>
+<li><p>fetch_all_fn</p></li>
+</ul>
+</dd>
+</dl>
+<p>If not provided, production defaults are used.</p>
+</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>configured Flask application instance.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Flask</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="app-pages-analysis">
+<h3>app.pages.analysis<a class="headerlink" href="#app-pages-analysis" title="Link to this heading">¶</a></h3>
+<p>Defines the main web routes for:</p>
+<ul class="simple">
+<li><p><cite>/analysis</cite></p></li>
+<li><p><cite>/pull-data</cite></p></li>
+<li><p><cite>/update-analysis</cite></p></li>
+</ul>
+<p>Responsibilities:
+- Execute SQL queries
+- Format analytics results
+- Enforce busy-state locking
+- Return JSON or HTML responses</p>
+<p id="module-app.pages.analysis">app/pages/analysis.py</p>
+<p>Flask routes for the GradCafe analytics web UI.</p>
+<p>This module is responsible for:
+- Rendering the Analysis page (GET /analysis)
+- Handling &quot;Pull Data&quot; requests (POST /pull-data)
+- Handling &quot;Update Analysis&quot; requests (POST /update-analysis)</p>
+<p>Design notes:
+- Uses dependency injection via <cite>current_app.extensions[&quot;deps&quot;]</cite> so tests can</p>
+<blockquote>
+<div><p>substitute fakes/mocks for database and ETL functions.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>Uses a shared busy-state (<cite>pull_state</cite>) to prevent concurrent pull/update
+operations (required by the assignment busy-gating rules).</p></li>
+<li><p>Keeps formatting logic in helper functions to ensure consistent display,
+especially for percentages (two decimals).</p></li>
+</ul>
+<dl class="py function">
+<dt class="sig sig-object py" id="app.pages.analysis.analysis">
+<span class="sig-prename descclassname"><span class="pre">app.pages.analysis.</span></span><span class="sig-name descname"><span class="pre">analysis</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/app/pages/analysis.html#analysis"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.pages.analysis.analysis" title="Link to this definition">¶</a></dt>
+<dd><p>Render the Analysis page.</p>
+<p>Responsibilities:
+- Execute required SQL queries for the Module 3 analytics
+- Package results into a dictionary used by the Jinja template
+- Provide busy-state flag to disable/gate button actions in UI</p>
+<dl class="simple">
+<dt>Dependency injection:</dt><dd><p><cite>current_app.extensions[&quot;deps&quot;]</cite> must provide:
+- fetch_one_fn(sql: str) -&gt; scalar result
+- fetch_all_fn(sql: str) -&gt; list of rows</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Flask response rendering templates/analysis.html</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="app.pages.analysis.home">
+<span class="sig-prename descclassname"><span class="pre">app.pages.analysis.</span></span><span class="sig-name descname"><span class="pre">home</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/app/pages/analysis.html#home"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.pages.analysis.home" title="Link to this definition">¶</a></dt>
+<dd><p>Home route.</p>
+<p>Redirects to the analysis page so the application has a single “main” UI.
+Keeping this as a function (rather than an HTTP redirect) makes it easy
+to test and keeps routing simple.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="app.pages.analysis.pull_data">
+<span class="sig-prename descclassname"><span class="pre">app.pages.analysis.</span></span><span class="sig-name descname"><span class="pre">pull_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/app/pages/analysis.html#pull_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.pages.analysis.pull_data" title="Link to this definition">¶</a></dt>
+<dd><p>Handle &quot;Pull Data&quot; button action.</p>
+<dl>
+<dt>Busy-gating requirement:</dt><dd><ul class="simple">
+<li><p>If a pull is already running, return 409 {&quot;busy&quot;: True}</p></li>
+</ul>
+</dd>
+<dt>Dependency injection:</dt><dd><p><cite>current_app.extensions[&quot;deps&quot;]</cite> must provide:
+- pull_data_fn() -&gt; dict or int</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>dict example: {&quot;ok&quot;: True, &quot;inserted&quot;: 123}</p></li>
+<li><p>int example: 123 (insert count)</p></li>
+</ul>
+</div></blockquote>
+</dd>
+<dt>Response type:</dt><dd><ul class="simple">
+<li><p>For browser requests: redirects back to /analysis with a flash message.</p></li>
+<li><p>For JSON/API requests (tests): returns JSON payload.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="app.pages.analysis.update_analysis">
+<span class="sig-prename descclassname"><span class="pre">app.pages.analysis.</span></span><span class="sig-name descname"><span class="pre">update_analysis</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/app/pages/analysis.html#update_analysis"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.pages.analysis.update_analysis" title="Link to this definition">¶</a></dt>
+<dd><p>Handle &quot;Update Analysis&quot; button action.</p>
+<dl>
+<dt>Busy-gating requirement:</dt><dd><ul class="simple">
+<li><p>If a pull is in progress, return 409 {&quot;busy&quot;: True} and do no work.</p></li>
+</ul>
+</dd>
+<dt>Dependency injection:</dt><dd><p><cite>current_app.extensions[&quot;deps&quot;]</cite> may provide:
+- update_analysis_fn() -&gt; None</p>
+<blockquote>
+<div><p>If not provided, defaults to a no-op to keep the route stable in tests.</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="app-db">
+<h3>app.db<a class="headerlink" href="#app-db" title="Link to this heading">¶</a></h3>
+<p>Database helper functions.</p>
+<p>Responsibilities:
+- fetch_one()
+- fetch_all()
+- Execute SQL safely
+- Return scalar or row results</p>
+<p id="module-app.db">app/db.py</p>
+<p>Database helper module for PostgreSQL connectivity using psycopg.</p>
+<section id="responsibilities">
+<h4>Responsibilities:<a class="headerlink" href="#responsibilities" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Retrieve database connection string</p></li>
+<li><p>Execute SQL queries</p></li>
+<li><p>Provide reusable helper functions for Flask routes</p></li>
+</ul>
+</section>
+<dl class="py function">
+<dt class="sig sig-object py" id="app.db.fetch_all">
+<span class="sig-prename descclassname"><span class="pre">app.db.</span></span><span class="sig-name descname"><span class="pre">fetch_all</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sql_query</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/app/db.html#fetch_all"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.db.fetch_all" title="Link to this definition">¶</a></dt>
+<dd><p>Execute SQL query and return all rows.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>sql_query</strong> (<em>str</em>) -- SQL query string</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Query result rows</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list[tuple]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="app.db.fetch_one">
+<span class="sig-prename descclassname"><span class="pre">app.db.</span></span><span class="sig-name descname"><span class="pre">fetch_one</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sql_query</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/app/db.html#fetch_one"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.db.fetch_one" title="Link to this definition">¶</a></dt>
+<dd><p>Execute SQL query and return first column of first row.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>sql_query</strong> (<em>str</em>) -- SQL query string</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Single value result or None if no result</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Any</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="app.db.get_database_url">
+<span class="sig-prename descclassname"><span class="pre">app.db.</span></span><span class="sig-name descname"><span class="pre">get_database_url</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="_modules/app/db.html#get_database_url"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.db.get_database_url" title="Link to this definition">¶</a></dt>
+<dd><p>Retrieve DATABASE_URL environment variable.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>PostgreSQL connection string</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>str</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ValueError</strong> -- If DATABASE_URL is not set</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="app-pages-pull-state">
+<h3>app.pages.pull_state<a class="headerlink" href="#app-pages-pull-state" title="Link to this heading">¶</a></h3>
+<p>Implements file-based locking to prevent concurrent data pulls.</p>
+<p>Responsibilities:
+- is_running()
+- start()
+- stop()</p>
+<p id="module-app.pages.pull_state">pull_state.py</p>
+<p>Provides a lightweight, file-based busy-state mechanism to prevent
+multiple simultaneous &quot;Pull Data&quot; executions.</p>
+<section id="why-a-lock-file">
+<h4>Why a lock file?<a class="headerlink" href="#why-a-lock-file" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Works across Flask reloads (unlike in-memory flags).</p></li>
+<li><p>Survives separate processes (important in development / CI).</p></li>
+<li><p>Easy to reason about and test.</p></li>
+<li><p>Does not require external services (e.g., Redis).</p></li>
+</ul>
+</section>
+<section id="behavior">
+<h4>Behavior:<a class="headerlink" href="#behavior" title="Link to this heading">¶</a></h4>
+<p>If the lock file exists → a pull is considered &quot;running&quot;.
+If the lock file does not exist → system is idle.</p>
+</section>
+<dl class="py function">
+<dt class="sig sig-object py" id="app.pages.pull_state.is_running">
+<span class="sig-prename descclassname"><span class="pre">app.pages.pull_state.</span></span><span class="sig-name descname"><span class="pre">is_running</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/app/pages/pull_state.html#is_running"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.pages.pull_state.is_running" title="Link to this definition">¶</a></dt>
+<dd><p>Determine whether a Pull Data operation is currently in progress.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>True if the lock file exists (busy), False otherwise.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>bool</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Usage:</dt><dd><ul class="simple">
+<li><p>Called before executing /pull-data</p></li>
+<li><p>Called before executing /update-analysis</p></li>
+<li><p>Used in templates to disable UI buttons when busy</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="app.pages.pull_state.start">
+<span class="sig-prename descclassname"><span class="pre">app.pages.pull_state.</span></span><span class="sig-name descname"><span class="pre">start</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/app/pages/pull_state.html#start"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.pages.pull_state.start" title="Link to this definition">¶</a></dt>
+<dd><p>Activate busy state by creating the lock file.</p>
+<dl class="simple">
+<dt>This function:</dt><dd><ul class="simple">
+<li><p>Creates a simple text file at the project root.</p></li>
+<li><p>Indicates that a pull operation is in progress.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition important">
+<p class="admonition-title">Important</p>
+<p>Must always be paired with <cite>stop()</cite> inside a try/finally
+block to prevent permanent lock state if errors occur.</p>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="app.pages.pull_state.stop">
+<span class="sig-prename descclassname"><span class="pre">app.pages.pull_state.</span></span><span class="sig-name descname"><span class="pre">stop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/app/pages/pull_state.html#stop"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.pages.pull_state.stop" title="Link to this definition">¶</a></dt>
+<dd><p>Deactivate busy state by removing the lock file.</p>
+<dl class="simple">
+<dt>Behavior:</dt><dd><ul class="simple">
+<li><p>If the file exists → delete it.</p></li>
+<li><p>If the file does not exist → silently ignore.</p></li>
+</ul>
+</dd>
+<dt>Why ignore FileNotFoundError?</dt><dd><p>Prevents crashes if:
+- stop() is called twice
+- Lock file was manually removed
+- Tests clean up before stop() executes</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">GradCafe Analytics</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Documentation Sections</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview &amp; Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#core-etl-modules">Core ETL Modules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#flask-application-web-layer">Flask Application &amp; Web Layer</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing Guide</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="architecture.html" title="previous chapter">Architecture</a></li>
+      <li>Next: <a href="testing.html" title="next chapter">Testing Guide</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2026, Sireesha Sankuratripati.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/api.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

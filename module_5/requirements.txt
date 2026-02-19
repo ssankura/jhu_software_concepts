@@ -1,0 +1,16 @@
+# Flask web framework (Module 3 & 4 web app)
+Flask>=3.0,<4
+
+# PostgreSQL driver (database connection)
+psycopg[binary]>=3.2,<4
+
+# HTML parsing for scraping (Module 2)
+beautifulsoup4>=4.12,<5
+
+# HTTP requests library (used in scraper)
+requests>=2.31,<3
+
+# Testing framework (used for pytest tests)
+pytest>=7.0,<9
+
+pytest-cov

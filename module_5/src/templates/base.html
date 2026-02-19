@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    {# ----------------------------------------------------------------------
+       Responsive Meta Tag
+       Ensures proper scaling on mobile and tablet devices.
+       Required for grid/flex layouts to behave correctly.
+    ---------------------------------------------------------------------- #}
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    {# ----------------------------------------------------------------------
+       Title Block
+       Child templates (e.g., analysis.html) override this block.
+       Allows dynamic page titles while maintaining a single base layout.
+    ---------------------------------------------------------------------- #}
+    <title>
+        {% block title %}GradCafe Dashboard{% endblock %}
+    </title>
+
+    {# ----------------------------------------------------------------------
+       Static CSS Loading
+       url_for('static', ...) ensures correct path resolution in:
+       - Development
+       - Testing
+       - CI environments
+    ---------------------------------------------------------------------- #}
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+
+    {# =========================================================================
+       Main Page Container
+       -------------------------------------------------------------------------
+       Provides consistent centered layout across all pages.
+       Child templates inject their content inside the "content" block.
+    ========================================================================= #}
+    <div class="container">
+
+        {# ----------------------------------------------------------------------
+           Content Block
+           All page-specific UI (analysis, buttons, etc.) is inserted here.
+           This enables layout inheritance and avoids duplication.
+        ---------------------------------------------------------------------- #}
+        {% block content %}
+        {% endblock %}
+
+    </div>
+
+</body>
+
+</html>
