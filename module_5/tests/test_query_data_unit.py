@@ -69,9 +69,12 @@ def test_run_query_multi_and_single_branches(capsys):
 def test_query_applicants_as_dicts_injected_fetcher():
     import query_data
 
-    def fake_fetch_all(sql):
-        assert "FROM applicants" in sql
+
+    def fake_fetch_all(stmt, params=None):
+        # stmt is now a psycopg SQL object, so we only assert on params
+        assert params == (1,)
         return [("u", "t", "s", "International", 4.0, 320, 160, 4.5, "MS", "P", "LP", "LU")]
+
 
     rows = query_data.query_applicants_as_dicts(limit=1, fetch_all_fn=fake_fetch_all)
     assert rows[0]["url"] == "u"
@@ -140,9 +143,8 @@ def test_query_applicants_as_dicts_uses_fetch_all_fn():
         ("u2", "Fall 2025", "Rejected", "American", None, None, None, None, "PhD", "EE", "EE", "Stanford"),
     ]
 
-    def fake_fetch_all(sql: str):
-        assert "FROM applicants" in sql
-        assert "ORDER BY url ASC" in sql
+    def fake_fetch_all(stmt, params=None):
+        assert params == (2,)
         return fake_rows
 
     out = query_data.query_applicants_as_dicts(limit=2, fetch_all_fn=fake_fetch_all)
@@ -295,7 +297,7 @@ def test_query_applicants_as_dicts_default_fetch_all_fn(monkeypatch):
         ("u1", "Fall 2026", "Accepted", "International", 3.9, 330, 165, 4.5, "MS", "CS", "CS", "MIT"),
     ]
 
-    monkeypatch.setattr(app_db, "fetch_all", lambda sql: fake_rows)
+    monkeypatch.setattr(app_db, "fetch_all", lambda stmt, params=None: fake_rows)
 
     out = query_data.query_applicants_as_dicts(limit=1, fetch_all_fn=None)
     assert out[0]["url"] == "u1"
@@ -322,3 +324,10 @@ def test_query_data_module_main_guard_line(monkeypatch):
     monkeypatch.setattr(query_data, "get_connection", lambda: DummyConn())
 
     runpy.run_module("query_data", run_name="__main__")
+
+
+@pytest.mark.db
+def test_clamp_limit_defaults_when_invalid():
+    import query_data
+    assert query_data._clamp_limit("abc") == 10
+    assert query_data._clamp_limit(None) == 10

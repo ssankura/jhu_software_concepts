@@ -33,11 +33,26 @@ from typing import Any, Callable, Optional
 import psycopg
 import sys
 from pathlib import Path
+from psycopg import sql
 
 # --- Path setup: allow autodoc to import modules from /src ---
 ROOT = Path(__file__).resolve().parents[2]   # module_4/
 SRC = ROOT / "src"                          # module_4/src
 sys.path.insert(0, str(SRC))
+
+
+def _clamp_limit(value: int, min_v: int = 1, max_v: int = 100) -> int:
+    """
+    Ensure LIMIT value is an integer within allowed bounds.
+    Defaults to 10 if invalid.
+    """
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        n = 10  # default if input is invalid
+
+    # Restrict limit between min_v and max_v
+    return max(min_v, min(n, max_v))
 
 
 # ============================================================================
@@ -198,16 +213,27 @@ def query_applicants_as_dicts(
         # Local import avoids circular dependencies when app imports query layer.
         from app.db import fetch_all as fetch_all_fn
 
-    # LIMIT is cast to int to avoid accidental SQL injection through non-int inputs.
-    sql = f"""
-    SELECT
-        url, term, status, us_or_international, gpa, gre, gre_v, gre_aw,
-        degree, program, llm_generated_program, llm_generated_university
-    FROM applicants
-    ORDER BY url ASC
-    LIMIT {int(limit)};
-    """
-    rows = fetch_all_fn(sql)
+    # Ensure limit is safe and bounded (1–100)
+    limit_n = _clamp_limit(limit)
+
+    stmt = sql.SQL("""
+                   SELECT url,
+                          term,
+                          status,
+                          us_or_international,
+                          gpa,
+                          gre,
+                          gre_v,
+                          gre_aw,
+                          degree,
+                          program,
+                          llm_generated_program,
+                          llm_generated_university
+                   FROM applicants
+                   ORDER BY url ASC LIMIT {lim};
+                   """).format(lim=sql.Placeholder())
+
+    rows = fetch_all_fn(stmt, (limit_n,))
 
     # Keys match the SELECT order and represent required fields for the app/tests.
     keys = [
