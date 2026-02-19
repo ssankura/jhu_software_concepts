@@ -4,79 +4,79 @@ app/db.py
 Database helper module for PostgreSQL connectivity using psycopg.
 
 Responsibilities:
-----------------
-• Retrieve database connection string
-• Execute SQL queries
-• Provide reusable helper functions for Flask routes
+- Build DB connection from environment variables
+- Provide small query helpers
 """
 
+from __future__ import annotations
+
 import os
+from typing import Any, Iterable, Optional, Sequence
+
 import psycopg
 
-import os
-import sys
-from pathlib import Path
-
-# --- Path setup: allow autodoc to import modules from /src ---
-ROOT = Path(__file__).resolve().parents[2]   # module_4/
-SRC = ROOT / "src"                          # module_4/src
-sys.path.insert(0, str(SRC))
 
 def get_database_url() -> str:
     """
-    Retrieve DATABASE_URL environment variable.
+    Return a PostgreSQL connection URL.
 
-    Returns:
-        str: PostgreSQL connection string
+    Supported configuration (in priority order):
+    1) DATABASE_URL (backward compatible)
+    2) DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD (Module 5 requirement)
 
     Raises:
-        ValueError: If DATABASE_URL is not set
+        ValueError: if required environment variables are missing.
     """
-    db_url = os.environ.get("DATABASE_URL")
+    db_url = os.getenv("DATABASE_URL")
+    if db_url:
+        return db_url
 
-    if not db_url:
+    host = os.getenv("DB_HOST")
+    port = os.getenv("DB_PORT", "5432")
+    name = os.getenv("DB_NAME")
+    user = os.getenv("DB_USER")
+    password = os.getenv("DB_PASSWORD")
+
+    missing = [k for k, v in {
+        "DB_HOST": host,
+        "DB_NAME": name,
+        "DB_USER": user,
+        "DB_PASSWORD": password,
+    }.items() if not v]
+
+    if missing:
         raise ValueError(
-            "DATABASE_URL environment variable is not set.\n"
-            "Example:\n"
-            'export DATABASE_URL="postgresql://username:password@localhost:5432/gradcafe"'
+            "Database environment is not configured.\n"
+            "Set DATABASE_URL, or set: DB_HOST, DB_NAME, DB_USER, DB_PASSWORD "
+            "(optional DB_PORT).\n"
+            f"Missing: {', '.join(missing)}"
         )
 
-    return db_url
+    return f"postgresql://{user}:{password}@{host}:{port}/{name}"
 
 
-def fetch_one(sql_query: str):
+def fetch_one(sql_query: str, params: Optional[Sequence[Any]] = None) -> Any:
     """
-    Execute SQL query and return first column of first row.
-
-    Args:
-        sql_query (str): SQL query string
-
-    Returns:
-        Any: Single value result or None if no result
+    Execute a query and return the first column of the first row.
     """
-
     with psycopg.connect(get_database_url()) as connection:
         with connection.cursor() as cursor:
-            cursor.execute(sql_query)
-
+            if params is None:
+                cursor.execute(sql_query)
+            else:
+                cursor.execute(sql_query, params)
             row = cursor.fetchone()
-
             return row[0] if row else None
 
 
-def fetch_all(sql_query: str):
+def fetch_all(sql_query: str, params: Optional[Sequence[Any]] = None) -> list[tuple]:
     """
-    Execute SQL query and return all rows.
-
-    Args:
-        sql_query (str): SQL query string
-
-    Returns:
-        list[tuple]: Query result rows
+    Execute a query and return all rows.
     """
-
     with psycopg.connect(get_database_url()) as connection:
         with connection.cursor() as cursor:
-            cursor.execute(sql_query)
-
+            if params is None:
+                cursor.execute(sql_query)
+            else:
+                cursor.execute(sql_query, params)
             return cursor.fetchall()
