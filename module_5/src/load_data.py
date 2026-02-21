@@ -38,10 +38,10 @@ import psycopg
 
 
 
-# --- Path setup: allow autodoc to import modules from /src ---
-ROOT = Path(__file__).resolve().parents[2]   # module_4/
-SRC = ROOT / "src"                          # module_4/src
-sys.path.insert(0, str(SRC))
+
+# --- Path setup: allow running as script without installing the package ---
+ROOT = Path(__file__).resolve().parents[1]  # points to src/
+sys.path.insert(0, str(ROOT))
 
 # ============================================================================
 # Logging Configuration
@@ -428,7 +428,7 @@ def load_data(json_file: str, batch_size: int = 1000) -> None:
             logger.info("Committed final batch #%s (end of file).",committed_batches)
 
         # Summary statistics for debugging and assignment evidence.
-        total = conn.execute("SELECT COUNT(*) FROM applicants;").fetchone()[0]
+        total = conn.execute("SELECT COUNT(*) FROM applicants LIMIT 1;").fetchone()[0]
         elapsed = round(time.time() - start_time, 2)
 
         logger.info("Data loading complete. Total records in database: %s", total)

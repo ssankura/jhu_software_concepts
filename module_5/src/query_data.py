@@ -38,12 +38,9 @@ from psycopg import sql
 from app.db import fetch_all as default_fetch_all_fn
 
 
-
-# --- Path setup: allow autodoc to import modules from /src ---
-ROOT = Path(__file__).resolve().parents[2]   # module_4/
-SRC = ROOT / "src"                          # module_4/src
-sys.path.insert(0, str(SRC))
-
+# --- Path setup: allow running as script without installing the package ---
+ROOT = Path(__file__).resolve().parents[1]  # points to src/
+sys.path.insert(0, str(ROOT))
 
 def _clamp_limit(value: int, min_v: int = 1, max_v: int = 100) -> int:
     """
@@ -123,8 +120,16 @@ def _clean_value(value):
 # - multi-column single-row outputs (e.g., 4 averages)
 # - multi-row outputs (e.g., top programs table)
 # ============================================================================
-# pylint: disable=too-many-arguments,too-many-positional-arguments
-def run_query(cursor, title, sql_query, multi=False, label=None, multi_labels=None):
+# pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-branches
+def run_query(
+            cursor,
+            title,
+            sql_query,
+            params=None,
+            multi=False,
+            label=None,
+            multi_labels=None,
+    ):
     """
     Execute SQL query and print results in a screenshot-style output.
 
@@ -141,7 +146,10 @@ def run_query(cursor, title, sql_query, multi=False, label=None, multi_labels=No
         - Web UI rendering is handled separately by Flask routes/templates.
     """
     _ = title
-    cursor.execute(sql_query)
+    if params is None:
+        cursor.execute(sql_query)
+    else:
+        cursor.execute(sql_query, params)
 
     # -------------------- Multi-row results --------------------
     # Used for queries like "Top 5 programs" where multiple rows are expected.

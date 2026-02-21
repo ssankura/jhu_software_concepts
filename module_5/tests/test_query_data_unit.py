@@ -330,3 +330,36 @@ def test_clamp_limit_defaults_when_invalid():
     import query_data
     assert query_data._clamp_limit("abc") == 10
     assert query_data._clamp_limit(None) == 10
+
+
+@pytest.mark.db
+def test_run_query_executes_with_params_branch(capsys):
+    import query_data
+
+    class Cursor:
+        def __init__(self):
+            self.calls = []
+
+        # must accept optional params for the branch
+        def execute(self, stmt, params=None):
+            self.calls.append((stmt, params))
+
+        def fetchone(self):
+            return (1,)
+
+        def fetchall(self):
+            return [(1,)]
+
+    cur = Cursor()
+
+    query_data.run_query(
+        cur,
+        title="t",
+        sql_query="SELECT %s",
+        params=(123,),
+        label="x",
+    )
+
+    assert cur.calls == [("SELECT %s", (123,))]
+    out = capsys.readouterr().out
+    assert "x: 1" in out

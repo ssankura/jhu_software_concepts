@@ -5,6 +5,7 @@ __pycache__/
 .coverage
 .pytest_cache/
 *.log
+.env
 
 # macOS
 .DS_Store
