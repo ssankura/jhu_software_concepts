@@ -31,7 +31,6 @@ from flask import (
 
 from app.pages import pages_bp
 from app.pages.pull_state import is_running, start, stop
-import os
 import sys
 from pathlib import Path
 
@@ -135,7 +134,8 @@ def analysis():
     q1_fall_2026_count = fetch_one("""
         SELECT COUNT(*)
         FROM applicants
-        WHERE term = 'Fall 2026';
+        WHERE term = 'Fall 2026'
+        LIMIT 1;
     """)
 
     # -----------------------------------------------------------------------
@@ -150,7 +150,8 @@ def analysis():
             2
           )
         FROM applicants
-        WHERE us_or_international IS NOT NULL;
+        WHERE us_or_international IS NOT NULL
+        LIMIT 1;
     """)
 
     # -----------------------------------------------------------------------
@@ -163,7 +164,8 @@ def analysis():
           ROUND(AVG(gre)::numeric, 3),
           ROUND(AVG(gre_v)::numeric, 3),
           ROUND(AVG(gre_aw)::numeric, 3)
-        FROM applicants;
+        FROM applicants
+        LIMIT 1;
     """)[0]
 
     # -----------------------------------------------------------------------
@@ -174,7 +176,8 @@ def analysis():
         FROM applicants
         WHERE term = 'Fall 2026'
           AND us_or_international = 'American'
-          AND gpa IS NOT NULL;
+          AND gpa IS NOT NULL
+        LIMIT 1;
     """)
 
     # -----------------------------------------------------------------------
@@ -188,7 +191,8 @@ def analysis():
             2
           )
         FROM applicants
-        WHERE term = 'Fall 2025';
+        WHERE term = 'Fall 2025'
+        LIMIT 1;
     """)
 
     # -----------------------------------------------------------------------
@@ -199,7 +203,8 @@ def analysis():
         FROM applicants
         WHERE term = 'Fall 2026'
           AND status = 'Accepted'
-          AND gpa IS NOT NULL;
+          AND gpa IS NOT NULL
+        LIMIT 1;
     """)
 
     # -----------------------------------------------------------------------
@@ -213,7 +218,8 @@ def analysis():
           AND (
                 llm_generated_university ILIKE '%Johns Hopkins%'
              OR llm_generated_university ILIKE '%JHU%'
-              );
+              )
+        LIMIT 1;
     """)
 
     # -----------------------------------------------------------------------
@@ -233,7 +239,8 @@ def analysis():
              OR llm_generated_university ILIKE '%Stanford%'
              OR llm_generated_university ILIKE '%Carnegie Mellon%'
              OR llm_generated_university ILIKE '%CMU%'
-              );
+              )
+        LIMIT 1;
     """)
 
     # -----------------------------------------------------------------------
@@ -253,7 +260,8 @@ def analysis():
              OR program ILIKE '%Stanford%'
              OR program ILIKE '%Carnegie Mellon%'
              OR program ILIKE '%CMU%'
-              );
+              )
+        LIMIT 1;
     """)
 
     # -----------------------------------------------------------------------
@@ -275,7 +283,8 @@ def analysis():
         SELECT ROUND(AVG(gpa)::numeric, 3)
         FROM applicants
         WHERE us_or_international = 'International'
-          AND gpa IS NOT NULL;
+          AND gpa IS NOT NULL
+        LIMIT 1;
     """)
 
     # Package results for the template. Keeping keys stable is important for tests.
