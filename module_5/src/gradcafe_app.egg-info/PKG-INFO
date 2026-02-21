@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: gradcafe_app
+Version: 1.0.0
+Summary: GradCafe analytics Flask application
+Requires-Python: >=3.10
+Requires-Dist: Flask<4,>=3.0
+Requires-Dist: psycopg[binary]<4,>=3.2
+Requires-Dist: beautifulsoup4<5,>=4.12
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

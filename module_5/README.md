@@ -1,290 +1,294 @@
-# Grad School Cafe Data Analysis — Module 4
+# Module 5 – Secure GradCafe Data Analysis Web Application
 
 ## Overview
 
-This project implements a complete data ingestion, database, analytics, and web application pipeline for Grad School Cafe applicant data.
+This project extends the GradCafe Data Analysis Web Application by incorporating security hardening, dependency management, packaging, and reproducibility best practices.
 
-It includes:
+The application loads GradCafe applicant data into a PostgreSQL database, performs SQL analytics through parameterized queries, and displays results on a stylized Flask web interface.
 
-- Data scraping
-- PostgreSQL database loading
-- Analytical SQL queries
-- Flask web application
-- Unit and integration testing
-- 100% automated test coverage
+Module 5 strengthens the system by:
 
-Module 4 builds upon Module 3 and includes architectural improvements and fixes based on failed test cases and coverage requirements.
-
----
-
-## Project Structure
-
-```
-module_4
-│
-├── pytest.ini
-├── load_data.log
-│
-├── src
-│   ├── load_data.py
-│   ├── pull_data.py
-│   ├── query_data.py
-│   ├── run.py
-│   ├── requirements.txt
-│   ├── README.md
-│   │
-│   ├── app
-│   │   ├── __init__.py
-│   │   ├── db.py
-│   │   └── pages
-│   │       ├── analysis.py
-│   │       └── pull_state.py
-│   │
-│   ├── templates
-│   │   ├── base.html
-│   │   └── analysis.html
-│   │
-│   └── static
-│       └── styles.css
-│
-└── tests
-    ├── conftest.py
-    ├── test_*.py
-```
+* Enforcing SQL injection defenses
+* Implementing least-privilege database access
+* Enforcing explicit query limits
+* Achieving 100% test coverage
+* Ensuring Pylint 10/10 compliance
+* Generating a dependency graph
+* Integrating security scanning
 
 ---
 
-## Features
+## Features Implemented
 
-### Data Pipeline
+### Database Integration
 
-- `pull_data.py` — Scrapes and loads data  
-- `load_data.py` — Inserts rows into PostgreSQL  
-- `query_data.py` — Executes analytical SQL queries  
+* Loads cleaned GradCafe applicant data into PostgreSQL using `psycopg`
+* Uses a structured relational schema for applicant data
+* Prevents duplicate entries using a unique URL constraint
+* Implements least-privilege access using a read-only database user
+* Supports configuration via `DATABASE_URL` or DB_* environment variables
 
-Database inserts are idempotent using:
+---
 
-```sql
-ON CONFLICT DO NOTHING
-```
+### SQL Data Analysis
+
+The application performs the following analytical queries:
+
+1. Number of applicants applying for Fall 2026
+2. Percentage of international applicants
+3. Average GPA, GRE Quantitative, GRE Verbal, and GRE Analytical Writing
+4. Average GPA of American applicants for Fall 2026
+5. Acceptance rate for Fall 2025
+6. Average GPA of accepted applicants for Fall 2026
+7. Count of applicants applying to Johns Hopkins University MS Computer Science
+8. Count of accepted PhD Computer Science applicants to selected universities
+9. Comparison of raw scraped data versus LLM-enhanced data
+10. Custom analysis:
+   * Top 5 most common programs for Fall 2026
+   * Average GPA of international applicants
+
+All SQL queries:
+
+* Use parameterized execution
+* Avoid f-string SQL construction
+* Avoid string concatenation
+* Enforce explicit `LIMIT` clauses
+* Validate and clamp user-provided limits between 1 and 100
 
 ---
 
 ### Flask Web Application
 
-Run locally:
-
-```bash
-export PYTHONPATH=src
-python src/run.py
-```
-
-Open:
-
-```
-http://127.0.0.1:5000/analysis
-```
-
-#### Available Routes
-
-| Route | Method | Description |
-|--------|--------|------------|
-| `/` | GET | Redirects to analysis |
-| `/analysis` | GET | Displays analytics |
-| `/pull-data` | POST | Runs scrape + load |
-| `/update-analysis` | POST | Refreshes analytics |
+* Uses Flask Blueprints for modular routing
+* Uses HTML templates and CSS styling
+* Displays SQL analytics dynamically
+* Integrates securely with PostgreSQL
+* Maintains Pull Data concurrency control
 
 ---
 
-### Dependency Injection (Module 4 Upgrade)
+### Pull Data Functionality
 
-Module 4 introduces dependency injection via:
+#### Pull Data Button
 
-```python
-app.extensions["deps"]
-```
+* Executes Module 2 scraping logic
+* Loads new GradCafe entries into PostgreSQL
+* Uses subprocess execution
+* Uses file-based locking to prevent concurrent scraping
 
-This enables:
+#### Update Analysis Button
 
-- Mocked scraper functions
-- Mocked database functions
-- True unit test isolation
-- Integration testing without rewriting routes
-
-This refactor was required to fix Module 3 test failures.
+* Refreshes the webpage with the latest database results
+* Disabled while data scraping is running
 
 ---
 
-### Busy-State Locking
+## Pull Data Concurrency Control
 
-To prevent concurrent pull operations:
+To prevent multiple simultaneous scraping operations, the application uses a file-based locking mechanism implemented in:
 
-- `pull_state.py` manages a lock file.
-- If busy:
-  - `/pull-data` returns HTTP 409
-  - `/update-analysis` returns HTTP 409
-  - UI disables Update button
+    src/app/pages/pull_state.py
 
----
+This module:
 
-## Analytical Questions Implemented
+* Creates a lock file when Pull Data begins
+* Prevents duplicate Pull Data execution
+* Disables Pull Data and Update Analysis buttons while scraping runs
+* Automatically removes the lock file when scraping completes
 
-The `/analysis` page computes:
-
-1. Fall 2026 applicant count  
-2. Percentage of International students (two decimal places)  
-3. Average GPA, GRE, GRE V, GRE AW  
-4. Average GPA of American students (Fall 2026)  
-5. Acceptance percentage (Fall 2025)  
-6. Average GPA of Accepted applicants (Fall 2026)  
-7. JHU Masters Computer Science applicants  
-8. Top University PhD CS acceptances (LLM-generated fields)  
-9. Same query using raw downloaded fields  
-10. Custom:
-   - Top 5 programs (Fall 2026)
-   - Average GPA International students  
-
-All percentage outputs are formatted using `_fmt_pct()` to guarantee:
-
-```
-XX.XX%
-```
+This ensures safe database updates and prevents concurrent scraper execution.
 
 ---
 
-## Testing
+## Security Enhancements
 
-The project includes:
+### SQL Injection Protection
 
-- Unit tests
-- Route tests
-- Button behavior tests
-- Database helper tests
-- Integration tests (PostgreSQL required)
-- End-to-end web tests
-- Main-block execution tests
-
-### Run Tests
-
-From `module_4` root:
-
-```bash
-pytest -q
-```
-
-Expected result:
-
-```
-61 passed
-Required test coverage of 100% reached.
-Total coverage: 100.00%
-```
+* All SQL queries use psycopg parameter binding (`%s`)
+* Safe dynamic SQL composition using `sql.SQL()` and `sql.Placeholder()`
+* No direct interpolation of user input
+* No f-string SQL queries
+* No string concatenation in query construction
 
 ---
 
-## Known Limitation
+### Least Privilege Database User
 
-When clicking **Pull Data**:
+A read-only PostgreSQL user (`grad_ro`) was created with:
 
-- The endpoint may display raw JSON in the browser.
-- Clicking the browser back button returns to the page.
-- The button may remain greyed out due to client-side JavaScript behavior.
+    CREATE USER grad_ro WITH PASSWORD 'your_password';
+    GRANT CONNECT ON DATABASE gradcafe TO grad_ro;
+    GRANT USAGE ON SCHEMA public TO grad_ro;
+    GRANT SELECT ON ALL TABLES IN SCHEMA public TO grad_ro;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO grad_ro;
 
-This occurs because the endpoint supports both:
+This ensures:
 
-- JSON responses (for automated tests)
-- HTML redirects (for browser usage)
-
-A future improvement would be:
-
-- Separate API and browser endpoints  
-- Or use AJAX for pull operations  
-
-This limitation does not affect correctness or test coverage.
+* No schema modification privileges
+* No DROP or ALTER permissions
+* No superuser access
+* Principle of least privilege enforced
 
 ---
 
-## Improvements Over Module 3
+## Dependency Management and Packaging
 
-Module 4 includes:
+### setup.py
 
-- Full dependency injection refactor
-- Correct blueprint endpoint naming (`pull_data_route`)
-- Busy-state locking
-- Strict percentage formatting
-- Idempotent database inserts
-- Removal of implicit DB imports in routes
-- Improved route testability
-- 100% test coverage
+The project includes a `setup.py` file allowing installation via:
 
----
+    pip install -e .
 
-## Database Configuration
+This ensures:
 
-Set environment variable:
-
-```bash
-export DATABASE_URL=postgresql://username:password@localhost:5432/dbname
-```
-
-Integration tests require a running PostgreSQL instance.
+* Clean module imports
+* No manual PYTHONPATH adjustments
+* CI compatibility
+* Reproducible installations
 
 ---
 
-## Install Dependencies
+### Dependency Graph
 
-```bash
-pip install -r requirements.txt
-```
+A full dependency graph was generated using:
 
----
+    PYTHONPATH=src python -m pydeps src/app/__init__.py --noshow -T svg -o dependency.svg
 
-## 📚 Sphinx Documentation
-
-Full project documentation generated using Sphinx is available here:
-
-https://github.com/ssankura/jhu_software_concepts/blob/main/module_4/docs/build/html
-
-The documentation includes:
-
-• Overview & Setup instructions (environment variables, running app & tests)  
-• Architecture description (Web / ETL / Database layers)  
-• API Reference generated using autodoc  
-• Testing Guide (markers, fixtures, selectors)  
-• Operational Notes (busy-state policy, idempotency strategy)  
-• Troubleshooting guide  
-
-The documentation was generated using:
-
-    cd module_4/docs
-    make clean
-    make html
-
-Generated HTML files are located under:
-
-    module_4/docs/build/html/
-
-## Read the Docs Hosting Note
-
-The Github repository is private as required for course submission.
-
-The free Read the Docs (Community) service does not support building documentation from private GitHub repositories. Because of this limitation, automated publishing to readthedocs.org was not possible.
-
-However, the complete Sphinx-generated HTML documentation is included in this repository under:
-
-module_4/docs/build/html/
-
-This satisfies the Module 4 documentation requirement.
-
+The generated file `dependency.svg` visualizes module relationships and dependency structure.
 
 ---
 
-## Final Status
+## Installation Instructions
 
-- All routes working
-- Integration tests passing
-- Database inserts idempotent
-- Web UI functional
-- 100% test coverage achieved
-- Known limitation documented
+### 1. Create Virtual Environment
 
+    python3 -m venv .venv
+    source .venv/bin/activate
+
+---
+
+### 2. Install Dependencies
+
+    pip install -r requirements.txt
+    pip install -e .
+
+---
+
+### 3. Configure PostgreSQL Connection
+
+Option A (Legacy)
+
+    export DATABASE_URL="postgresql://username:password@localhost:5432/gradcafe"
+
+Option B (Module 5 Required Style)
+
+    export DB_HOST=localhost
+    export DB_PORT=5432
+    export DB_NAME=gradcafe
+    export DB_USER=grad_ro
+    export DB_PASSWORD=your_password
+
+---
+
+### 4. Load Applicant Data
+
+    python load_data.py --file applicant_data.json
+
+---
+
+### 5. Run SQL Queries
+
+    python query_data.py
+
+---
+
+### 6. Run Flask Application
+
+    python -m src.run
+
+Open browser:
+
+    http://127.0.0.1:5000
+
+---
+
+## Testing and Static Analysis
+
+### Run Tests (100% Coverage Required)
+
+    pytest --cov=src --cov-fail-under=100
+
+---
+
+### Run Pylint (10/10 Required)
+
+    python -m pylint src --fail-under=10
+
+---
+
+## Security Scanning
+
+Security scanning was performed using Snyk:
+
+    snyk test
+
+Optional static code scan:
+
+    snyk code test
+
+---
+
+## Technologies Used
+
+* Python 3.14
+* Flask
+* PostgreSQL
+* psycopg
+* pytest
+* pytest-cov
+* pylint
+* pydeps
+* graphviz
+* Snyk
+* uv
+
+---
+
+## Database Schema
+
+The PostgreSQL database contains a single table named `applicants` with the following fields:
+
+* Program
+* Comments
+* Date Added
+* URL (unique)
+* Status
+* Term
+* Citizenship Status
+* GPA
+* GRE Quantitative
+* GRE Verbal
+* GRE Analytical Writing
+* Degree
+* LLM Generated Program
+* LLM Generated University
+
+---
+
+## Known Limitations
+
+### Read-Only User Restriction
+
+* The `grad_ro` user cannot insert or modify data.
+* Data loading must be performed using a higher-privileged user.
+
+### Scraping Data Accuracy
+
+* GradCafe data is user-submitted and anonymous.
+* Entries may be incomplete, inconsistent, or inaccurate.
+
+---
+
+## Academic Integrity
+
+All code was implemented following assignment requirements using only permitted libraries and methodologies. Security enhancements and testing rigor were implemented using best practices aligned with secure software development standards.

@@ -39,10 +39,15 @@ from app.db import get_database_url
 
 @pytest.mark.db
 def test_get_database_url_raises_when_missing(monkeypatch):
-
-    # Remove DATABASE_URL from environment for this test
+    # Remove Option A
     monkeypatch.delenv("DATABASE_URL", raising=False)
 
-    # Function must raise ValueError if variable is missing
+    # Remove Option B
+    monkeypatch.delenv("DB_HOST", raising=False)
+    monkeypatch.delenv("DB_PORT", raising=False)
+    monkeypatch.delenv("DB_NAME", raising=False)
+    monkeypatch.delenv("DB_USER", raising=False)
+    monkeypatch.delenv("DB_PASSWORD", raising=False)
+
     with pytest.raises(ValueError):
         get_database_url()
