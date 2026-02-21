@@ -26,15 +26,16 @@ Operational Notes:
 
 import argparse
 import json
-import os
-import time
 import logging
+import os
+import sys
+import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import psycopg
-import sys
-from pathlib import Path
+
 
 
 # --- Path setup: allow autodoc to import modules from /src ---
@@ -306,7 +307,8 @@ def load_json(path: str) -> List[Dict[str, Any]]:
     Raises:
         ValueError: If JSON root is not a list (assignment expects list of records).
     """
-    logger.info(f"Loading JSON file: {path}")
+    logger.info("Loading JSON file: %s", path)
+
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -315,7 +317,8 @@ def load_json(path: str) -> List[Dict[str, Any]]:
 
     # Defensive: filter out non-dict items to avoid insert failures.
     records = [x for x in data if isinstance(x, dict)]
-    logger.info(f"Loaded {len(records)} dict records from JSON.")
+    logger.info("Loaded %s dict records from JSON.", len(records))
+
     return records
 
 
@@ -329,6 +332,7 @@ def load_json(path: str) -> List[Dict[str, Any]]:
 # - summary logging
 # ============================================================================
 
+# pylint: disable=too-many-locals
 def load_data(json_file: str, batch_size: int = 1000) -> None:
     """
     Load JSON records into PostgreSQL.
@@ -343,7 +347,7 @@ def load_data(json_file: str, batch_size: int = 1000) -> None:
         - Lower transaction overhead
     """
     start_time = time.time()
-    logger.info(f"Starting data load from file: {json_file} (batch_size={batch_size})")
+    logger.info("Starting data load from file: %s (batch_size=%s)", json_file, batch_size)
 
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
@@ -393,7 +397,9 @@ def load_data(json_file: str, batch_size: int = 1000) -> None:
                 # Avoid noisy logs: warn only for first few and periodic milestones
                 if skipped_missing_url <= 5 or skipped_missing_url % 1000 == 0:
                     logger.warning(
-                        f"Skipping record #{idx} due to missing URL (skipped={skipped_missing_url})."
+                        "Skipping record #%s due to missing URL (skipped=%s).",
+                        idx,
+                        skipped_missing_url,
                     )
                 continue
 
@@ -407,7 +413,9 @@ def load_data(json_file: str, batch_size: int = 1000) -> None:
 
                 committed_batches += 1
                 logger.info(
-                    f"Committed batch #{committed_batches} (processed up to record #{idx})."
+                    "Committed batch #%s (processed up to record #%s).",
+                    committed_batches,
+                    idx,
                 )
                 batch = []
 
@@ -417,16 +425,16 @@ def load_data(json_file: str, batch_size: int = 1000) -> None:
                 cur.executemany(insert_sql, batch)
             conn.commit()
             committed_batches += 1
-            logger.info(f"Committed final batch #{committed_batches} (end of file).")
+            logger.info("Committed final batch #%s (end of file).",committed_batches)
 
         # Summary statistics for debugging and assignment evidence.
         total = conn.execute("SELECT COUNT(*) FROM applicants;").fetchone()[0]
         elapsed = round(time.time() - start_time, 2)
 
-        logger.info(f"Data loading complete. Total records in database: {total}")
-        logger.info(f"Skipped missing-url records: {skipped_missing_url}")
-        logger.info(f"Total batches committed: {committed_batches}")
-        logger.info(f"Total execution time: {elapsed} seconds")
+        logger.info("Data loading complete. Total records in database: %s", total)
+        logger.info("Skipped missing-url records: %s", skipped_missing_url)
+        logger.info("Total batches committed: %s", committed_batches)
+        logger.info("Total execution time: %s seconds", elapsed)
 
         # Friendly final console output for humans
         print(f"\n✅ Data loading complete. Total records in database: {total}")

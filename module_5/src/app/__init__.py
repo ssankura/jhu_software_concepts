@@ -19,17 +19,23 @@ Assignment Requirements Satisfied:
 ✔ Use DATABASE_URL for DB access (via app.db)
 """
 
+
 from __future__ import annotations
 
+# stdlib
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Optional
 
+# third-party
 from flask import Flask
-from app.db import fetch_one, fetch_all
 
-import os
-import sys
-from pathlib import Path
+# first-party
+from app.db import fetch_all, fetch_one
+from app.pages import pages_bp
+
+
 
 # --- Path setup: allow autodoc to import modules from /src ---
 ROOT = Path(__file__).resolve().parents[2]   # module_4/
@@ -63,7 +69,7 @@ class BusyState:
     This class exists primarily to make busy-state observable/testable
     in higher-level architecture if needed in the future.
     """
-    pass
+    is_busy: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +176,6 @@ def create_app(test_config: Optional[dict] = None,
     # -----------------------------------------------------------------------
     # Blueprints modularize route definitions.
     # This keeps the application scalable and organized.
-    from app.pages import pages_bp
     app.register_blueprint(pages_bp)
 
     return app

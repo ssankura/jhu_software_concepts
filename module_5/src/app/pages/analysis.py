@@ -17,27 +17,15 @@ Design notes:
   especially for percentages (two decimals).
 """
 
+
 from decimal import Decimal
 
-from flask import (
-    current_app,
-    flash,
-    jsonify,
-    redirect,
-    render_template,
-    request,
-    url_for,
-)
+from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
 
 from app.pages import pages_bp
 from app.pages.pull_state import is_running, start, stop
-import sys
-from pathlib import Path
 
-# --- Path setup: allow autodoc to import modules from /src ---
-ROOT = Path(__file__).resolve().parents[2]   # module_4/
-SRC = ROOT / "src"                          # module_4/src
-sys.path.insert(0, str(SRC))
+
 
 # ---------------------------------------------------------------------------
 # Formatting helpers (kept here so the template stays simple and consistent)
@@ -346,7 +334,7 @@ def pull_data():
         # Normalize result into a predictable JSON shape for tests and UI.
         if not isinstance(result, dict):
             result = {"ok": True, "inserted": int(result) if result is not None else 0}
-    except Exception as e:
+    except Exception as e: # pylint: disable=broad-exception-caught
         # Convert exceptions into a structured JSON response (tests can assert this).
         result = {"ok": False, "error": str(e)}
     finally:
