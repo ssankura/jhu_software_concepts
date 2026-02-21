@@ -38,7 +38,8 @@ def test_run_returns_returncode_and_logs(monkeypatch, tmp_path):
         stdout = "hello"
         stderr = "oops"
 
-    def fake_run(cmd, cwd=None, capture_output=None, text=None):
+    def fake_run(cmd, cwd, capture_output, text=None, check=False):
+
         # Validate parameters passed to subprocess
         assert isinstance(cmd, list)
         assert str(tmp_path) in str(cwd)

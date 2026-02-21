@@ -27,13 +27,17 @@ Design Notes:
 """
 
 import os
+import sys
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 import psycopg
-import sys
-from pathlib import Path
 from psycopg import sql
+
+from app.db import fetch_all as default_fetch_all_fn
+
+
 
 # --- Path setup: allow autodoc to import modules from /src ---
 ROOT = Path(__file__).resolve().parents[2]   # module_4/
@@ -119,15 +123,15 @@ def _clean_value(value):
 # - multi-column single-row outputs (e.g., 4 averages)
 # - multi-row outputs (e.g., top programs table)
 # ============================================================================
-
-def run_query(cursor, title, sql, multi=False, label=None, multi_labels=None):
+# pylint: disable=too-many-arguments,too-many-positional-arguments
+def run_query(cursor, title, sql_query, multi=False, label=None, multi_labels=None):
     """
     Execute SQL query and print results in a screenshot-style output.
 
     Args:
         cursor: psycopg cursor object.
         title: Human-readable title for the query (kept for readability).
-        sql: SQL query string.
+        sql_query: SQL query string.
         multi: True if the query returns multiple rows.
         label: Label for single-value outputs (e.g., "Applicant count").
         multi_labels: Labels for multi-column single-row outputs (e.g., averages).
@@ -136,7 +140,8 @@ def run_query(cursor, title, sql, multi=False, label=None, multi_labels=None):
         - This function prints to console (for Module 3 screenshots).
         - Web UI rendering is handled separately by Flask routes/templates.
     """
-    cursor.execute(sql)
+    _ = title
+    cursor.execute(sql_query)
 
     # -------------------- Multi-row results --------------------
     # Used for queries like "Top 5 programs" where multiple rows are expected.
@@ -211,7 +216,7 @@ def query_applicants_as_dicts(
     """
     if fetch_all_fn is None:
         # Local import avoids circular dependencies when app imports query layer.
-        from app.db import fetch_all as fetch_all_fn
+        fetch_all_fn = default_fetch_all_fn
 
     # Ensure limit is safe and bounded (1–100)
     limit_n = _clamp_limit(limit)
@@ -271,7 +276,7 @@ def main():
             run_query(
                 cursor,
                 title="Q1: Number of Fall 2026 applicants",
-                sql="""
+                sql_query="""
                     SELECT COUNT(*)
                     FROM applicants
                     WHERE term = 'Fall 2026';
@@ -286,7 +291,7 @@ def main():
             run_query(
                 cursor,
                 title="Q2: Percentage of International Applicants",
-                sql="""
+                sql_query="""
                 SELECT
                   ROUND(
                     100.0 * SUM(CASE WHEN us_or_international = 'International' THEN 1 ELSE 0 END)
@@ -306,7 +311,7 @@ def main():
             run_query(
                 cursor,
                 title="Q3: Average GPA, GRE, GRE V, GRE AW",
-                sql="""
+                sql_query="""
                 SELECT
                   ROUND(AVG(gpa)::numeric, 3),
                   ROUND(AVG(gre)::numeric, 3),
@@ -328,7 +333,7 @@ def main():
             run_query(
                 cursor,
                 title="Q4: Avg GPA of American Students (Fall 2026)",
-                sql="""
+                sql_query="""
                 SELECT ROUND(AVG(gpa)::numeric, 3)
                 FROM applicants
                 WHERE term = 'Fall 2026'
@@ -344,7 +349,7 @@ def main():
             run_query(
                 cursor,
                 title="Q5: Acceptance % Fall 2025",
-                sql="""
+                sql_query="""
                 SELECT
                   ROUND(
                     100.0 * SUM(CASE WHEN status = 'Accepted' THEN 1 ELSE 0 END)
@@ -363,7 +368,7 @@ def main():
             run_query(
                 cursor,
                 title="Q6: Avg GPA of Accepted Applicants (Fall 2026)",
-                sql="""
+                sql_query="""
                 SELECT ROUND(AVG(gpa)::numeric, 3)
                 FROM applicants
                 WHERE term = 'Fall 2026'
@@ -379,7 +384,7 @@ def main():
             run_query(
                 cursor,
                 title="Q7: JHU Masters Computer Science Applicants",
-                sql="""
+                sql_query="""
                 SELECT COUNT(*)
                 FROM applicants
                 WHERE degree ILIKE 'Master%'
@@ -399,7 +404,7 @@ def main():
             run_query(
                 cursor,
                 title="Q8: 2026 Accepted PhD CS Applicants at Top Universities",
-                sql="""
+                sql_query="""
                 SELECT COUNT(*)
                 FROM applicants
                 WHERE term ILIKE '%2026%'
@@ -424,7 +429,7 @@ def main():
             run_query(
                 cursor,
                 title="Q9: Same as Q8 Using Raw Downloaded Fields",
-                sql="""
+                sql_query="""
                 SELECT COUNT(*)
                 FROM applicants
                 WHERE term ILIKE '%2026%'
@@ -449,7 +454,7 @@ def main():
             run_query(
                 cursor,
                 title="Custom Q10A: Top 5 Programs (Fall 2026)",
-                sql="""
+                sql_query="""
                 SELECT program, COUNT(*)
                 FROM applicants
                 WHERE term = 'Fall 2026'
@@ -466,7 +471,7 @@ def main():
             run_query(
                 cursor,
                 title="Custom Q10B: Avg GPA of International Applicants",
-                sql="""
+                sql_query="""
                 SELECT ROUND(AVG(gpa)::numeric, 3)
                 FROM applicants
                 WHERE us_or_international = 'International'

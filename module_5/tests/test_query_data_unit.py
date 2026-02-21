@@ -170,7 +170,7 @@ def test_run_query_single_value_with_label(monkeypatch, capsys):
         def fetchone(self):
             return (123,)
 
-    query_data.run_query(Cur(), title="t", sql="SELECT 1", label="Applicant count")
+    query_data.run_query(Cur(), title="t", sql_query="SELECT 1", label="Applicant count")
     captured = capsys.readouterr().out
     assert "Applicant count: 123" in captured
 
@@ -190,7 +190,7 @@ def test_run_query_multi_row(monkeypatch, capsys):
                 ("Fall 2025", Decimal("5")),
             ]
 
-    query_data.run_query(Cur(), title="t", sql="SELECT x", multi=True)
+    query_data.run_query(Cur(), title="t", sql_query="SELECT x", multi=True)
     out = capsys.readouterr().out
     assert "Fall 2026 10.0" in out
     assert "Fall 2025 5.0" in out
@@ -211,7 +211,7 @@ def test_run_query_multi_value_with_labels(capsys):
     query_data.run_query(
         Cur(),
         title="t",
-        sql="SELECT avg(gpa), avg(gre)",
+        sql_query="SELECT avg(gpa), avg(gre)",
         multi_labels=["Average GPA", "Average GRE"],
     )
     out = capsys.readouterr().out
@@ -230,7 +230,7 @@ def test_run_query_no_results_prints_message(capsys):
         def fetchone(self):
             return None
 
-    query_data.run_query(Cur(), title="t", sql="SELECT nothing")
+    query_data.run_query(Cur(), title="t", sql_query="SELECT nothing")
     out = capsys.readouterr().out
     assert "No results" in out
 
@@ -267,7 +267,7 @@ def test_run_query_single_value_no_label(capsys):
         def fetchone(self):
             return (777,)
 
-    query_data.run_query(Cur(), title="t", sql="SELECT 1", label=None)
+    query_data.run_query(Cur(), title="t", sql_query="SELECT 1", label=None)
     out = capsys.readouterr().out
     assert "777" in out
 
@@ -282,7 +282,7 @@ def test_run_query_multi_value_without_matching_labels_hits_else_branch(capsys):
         def fetchone(self):
             return (1, 2, 3)
 
-    query_data.run_query(Cur(), title="t", sql="SELECT 1,2,3", multi_labels=["A", "B"])
+    query_data.run_query(Cur(), title="t", sql_query="SELECT 1,2,3", multi_labels=["A", "B"])
     out = capsys.readouterr().out
     assert "1 2 3" in out
 
@@ -291,13 +291,12 @@ def test_run_query_multi_value_without_matching_labels_hits_else_branch(capsys):
 @pytest.mark.db
 def test_query_applicants_as_dicts_default_fetch_all_fn(monkeypatch):
     import query_data
-    import app.db as app_db
 
     fake_rows = [
         ("u1", "Fall 2026", "Accepted", "International", 3.9, 330, 165, 4.5, "MS", "CS", "CS", "MIT"),
     ]
 
-    monkeypatch.setattr(app_db, "fetch_all", lambda stmt, params=None: fake_rows)
+    monkeypatch.setattr(query_data, "default_fetch_all_fn", lambda stmt, params=None: fake_rows)
 
     out = query_data.query_applicants_as_dicts(limit=1, fetch_all_fn=None)
     assert out[0]["url"] == "u1"

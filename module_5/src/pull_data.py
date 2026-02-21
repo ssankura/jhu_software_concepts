@@ -23,14 +23,14 @@ Important:
 This script assumes DATABASE_URL is set in the environment.
 """
 
+import logging
 import os
 import subprocess
-from pathlib import Path
-import logging
-
-from app.pages.pull_state import stop
 import sys
 from pathlib import Path
+
+from app.pages.pull_state import stop
+
 
 # --- Path setup: allow autodoc to import modules from /src ---
 ROOT = Path(__file__).resolve().parents[2]   # module_4/
@@ -83,6 +83,7 @@ def _run(cmd, cwd: Path, step_name: str) -> int:
         cwd=str(cwd),
         capture_output=True,
         text=True,
+        check=False,  # explicitly state we are handling return code manually
     )
 
     if proc.stdout:
@@ -102,6 +103,7 @@ def _run(cmd, cwd: Path, step_name: str) -> int:
 # Always releases busy lock in finally block.
 # ============================================================================
 
+# pylint: disable=too-many-return-statements
 def main() -> int:
     """
     Execute the full Pull Data pipeline.

@@ -17,9 +17,6 @@ If the lock file exists → a pull is considered "running".
 If the lock file does not exist → system is idle.
 """
 
-from pathlib import Path
-
-import os
 import sys
 from pathlib import Path
 
