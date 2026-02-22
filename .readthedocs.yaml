@@ -6,7 +6,7 @@ build:
     python: "3.12"
 
 sphinx:
-  configuration: module_5/docs/conf.py
+  configuration: module_5/docs/src/conf.py
 
 python:
   install:
