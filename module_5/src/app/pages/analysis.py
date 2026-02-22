@@ -1,22 +1,11 @@
 """
-app/pages/analysis.py
-
 Flask routes for the GradCafe analytics web UI.
 
-This module is responsible for:
-- Rendering the Analysis page (GET /analysis)
-- Handling "Pull Data" requests (POST /pull-data)
-- Handling "Update Analysis" requests (POST /update-analysis)
-
-Design notes:
-- Uses dependency injection via `current_app.extensions["deps"]` so tests can
-  substitute fakes/mocks for database and ETL functions.
-- Uses a shared busy-state (`pull_state`) to prevent concurrent pull/update
-  operations (required by the assignment busy-gating rules).
-- Keeps formatting logic in helper functions to ensure consistent display,
-  especially for percentages (two decimals).
+This module renders the analysis page and handles pull-data and update-analysis requests.
+It uses dependency injection through current_app.extensions["deps"] so tests can provide fakes.
+A shared busy-state in pull_state prevents pull/update operations from running at the same time.
+Helper functions keep formatting consistent (for example, percentages with two decimals).
 """
-
 
 from decimal import Decimal
 
@@ -304,21 +293,19 @@ def analysis():
 @pages_bp.post("/pull-data", endpoint="pull_data_route")
 def pull_data():
     """
-    Handle "Pull Data" button action.
+    Handle the Pull Data button action.
 
-    Busy-gating requirement:
-        - If a pull is already running, return 409 {"busy": True}
+    If a pull operation is already running, this endpoint returns HTTP 409 with {"busy": True}.
 
-    Dependency injection:
-        `current_app.extensions["deps"]` must provide:
-        - pull_data_fn() -> dict or int
-          - dict example: {"ok": True, "inserted": 123}
-          - int example: 123 (insert count)
+    Dependencies:
+    current_app.extensions["deps"] must provide a pull_data_fn() callable.
+    That function may return either a dictionary (for example {"ok": True, "inserted": 123})
+    or an integer representing the number of inserted records.
 
-    Response type:
-        - For browser requests: redirects back to /analysis with a flash message.
-        - For JSON/API requests (tests): returns JSON payload.
-    """
+    Response behavior:
+    For browser requests, the endpoint redirects back to /analysis with a flash message.
+    For JSON or API requests (used in tests), it returns a JSON payload.
+"""
     # Reject new pulls while another pull is in progress.
     if is_running():
         return jsonify({"busy": True}), 409
@@ -358,15 +345,14 @@ def pull_data():
 @pages_bp.post("/update-analysis")
 def update_analysis():
     """
-    Handle "Update Analysis" button action.
+    Handle the Update Analysis button action.
 
-    Busy-gating requirement:
-        - If a pull is in progress, return 409 {"busy": True} and do no work.
+    If a pull operation is currently in progress, this endpoint returns
+    HTTP 409 with {"busy": True} and does not perform any update.
 
-    Dependency injection:
-        `current_app.extensions["deps"]` may provide:
-        - update_analysis_fn() -> None
-          If not provided, defaults to a no-op to keep the route stable in tests.
+    Dependencies:
+    current_app.extensions["deps"] may provide an update_analysis_fn() callable.
+    If not provided, the route defaults to a no-op to keep behavior stable during tests.
     """
     if is_running():
         return jsonify({"busy": True}), 409

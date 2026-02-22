@@ -1,30 +1,29 @@
 """
 query_data.py
 
-Module 3/4 - Querying PostgreSQL (GradCafe dataset)
+Module 5 - Querying PostgreSQL (GradCafe dataset)
 
 This module supports two use cases:
 
-1) CLI reporting (Module 3):
-   - Connects to PostgreSQL via DATABASE_URL
-   - Runs the required SQL analytics queries
-   - Prints results in a screenshot-friendly format
+1) CLI reporting:
+   - Connects to PostgreSQL via environment variables
+   - Runs SQL analytics queries
+   - Prints results in a readable format
 
-2) Testability support (Module 4):
-   - Exposes `query_applicants_as_dicts()` which returns rows as dictionaries
-     with stable keys used by templates/tests.
+2) Web/Test support:
+   - Exposes query_applicants_as_dicts()
+   - Returns rows as dictionaries with stable keys
 
-How to run (CLI):
------------------
-export DATABASE_URL="postgresql://graduser:grad123@localhost:5432/gradcafe"
+How to run:
+Set DATABASE_URL and execute:
 python3 query_data.py
 
-Design Notes:
--------------
-- Uses psycopg for PostgreSQL connectivity.
-- Uses defensive formatting for Decimal outputs (common for numeric SQL types).
-- Keeps query printing logic in `run_query()` so each question stays readable.
+Design notes:
+- Uses psycopg for PostgreSQL connectivity
+- Formats Decimal outputs safely
+- Keeps query printing logic in run_query()
 """
+
 
 import os
 import sys
