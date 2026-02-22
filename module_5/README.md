@@ -288,6 +288,12 @@ The PostgreSQL database contains a single table named `applicants` with the foll
 * Entries may be incomplete, inconsistent, or inaccurate.
 
 ---
+## Documentation (Read the Docs)
+
+The full Sphinx documentation is available at:
+
+https://jhu-software-concepts-module5.readthedocs.io/en/latest/
+
 
 ## Academic Integrity
 
