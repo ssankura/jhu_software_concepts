@@ -26,7 +26,7 @@ Notes:
   instead of running Flask’s built-in server.
 """
 
-from app import create_app
+from web.app import create_app
 
 
 # ============================================================================

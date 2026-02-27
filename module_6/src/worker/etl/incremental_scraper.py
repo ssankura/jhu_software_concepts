@@ -29,7 +29,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from app.pages.pull_state import stop
+from web.app.pages.pull_state import stop
 
 
 # --- Path setup: allow autodoc to import modules from /src ---

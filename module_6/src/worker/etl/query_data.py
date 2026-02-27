@@ -34,8 +34,7 @@ from typing import Any, Callable, Optional
 import psycopg
 from psycopg import sql
 
-from app.db import fetch_all as default_fetch_all_fn
-
+from web.app.db import fetch_all as default_fetch_all_fn
 
 # --- Path setup: allow running as script without installing the package ---
 ROOT = Path(__file__).resolve().parents[1]  # points to src/
