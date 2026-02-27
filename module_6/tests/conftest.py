@@ -31,7 +31,6 @@ import os
 import psycopg
 import pytest
 
-
 # ============================================================================
 # Ensure src/ is importable
 # ----------------------------------------------------------------------------
@@ -49,7 +48,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 
-from app import create_app
+from web.app import create_app
 
 
 # ============================================================================
