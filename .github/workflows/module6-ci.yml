@@ -80,8 +80,10 @@ jobs:
       DB_NAME: appdb
       DB_USER: app
       DB_PASSWORD: app
+      DATABASE_URL: postgresql://app:app@localhost:5432/appdb
       PYTHONUNBUFFERED: "1"
       PYTHONPATH: src:src/web
+
 
     defaults:
       run:
