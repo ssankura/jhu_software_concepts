@@ -30,9 +30,8 @@ jobs:
           --health-retries=10
 
     env:
-      DATABASE_URL: postgresql://app:app@localhost:5432/appdb
       PYTHONUNBUFFERED: "1"
-      PYTHONPATH: src/web/web
+      PYTHONPATH: src/web
 
     defaults:
       run:
@@ -76,9 +75,13 @@ jobs:
           --health-retries=10
 
     env:
-      DATABASE_URL: postgresql://app:app@localhost:5432/appdb
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      DB_NAME: appdb
+      DB_USER: app
+      DB_PASSWORD: app
       PYTHONUNBUFFERED: "1"
-      PYTHONPATH: src/web/web
+      PYTHONPATH: src/web
 
     defaults:
       run:
@@ -101,4 +104,4 @@ jobs:
 
       - name: Run pytest with 100% coverage
         run: |
-          pytest --cov=src --cov-fail-under=100
+          pytest --cov=src/web --cov=src/worker --cov-fail-under=100
