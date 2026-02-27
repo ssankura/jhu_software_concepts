@@ -31,7 +31,7 @@ jobs:
 
     env:
       PYTHONUNBUFFERED: "1"
-      PYTHONPATH: src/web
+      PYTHONPATH: src:src/web
 
     defaults:
       run:
@@ -81,7 +81,7 @@ jobs:
       DB_USER: app
       DB_PASSWORD: app
       PYTHONUNBUFFERED: "1"
-      PYTHONPATH: src/web
+      PYTHONPATH: src:src/web
 
     defaults:
       run:
