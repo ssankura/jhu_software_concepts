@@ -33,9 +33,7 @@ from flask import Flask
 
 # first-party
 from .db import fetch_all, fetch_one
-from app.pages import pages_bp
-
-
+from .pages import pages_bp
 
 # --- Path setup: allow autodoc to import modules from /src ---
 ROOT = Path(__file__).resolve().parents[2]   # module_4/
