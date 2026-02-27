@@ -32,7 +32,7 @@ from typing import Callable, Optional
 from flask import Flask
 
 # first-party
-from app.db import fetch_all, fetch_one
+from .db import fetch_all, fetch_one
 from app.pages import pages_bp
 
 
