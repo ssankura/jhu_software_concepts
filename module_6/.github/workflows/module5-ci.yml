@@ -1,0 +1,122 @@
+name: Module 5 CI
+
+on:
+  push:
+    paths:
+      - "module_5/**"
+      - ".github/workflows/module5-ci.yml"
+  pull_request:
+    paths:
+      - "module_5/**"
+      - ".github/workflows/module5-ci.yml"
+
+jobs:
+
+  pylint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: module_5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run pylint (src only, fail under 10)
+        run: |
+          python -m pylint src --fail-under=10
+
+
+  tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: module_5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run pytest with 100% coverage gate
+        run: |
+          pytest --cov=src --cov-fail-under=100
+
+
+  dependency_graph:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: module_5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Generate dependency.svg and fail if missing
+        run: |
+          PYTHONPATH=src python -m pydeps src/app/__init__.py --noshow -T svg -o dependency.svg
+          test -f dependency.svg
+
+
+  snyk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: module_5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node (for Snyk CLI)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Snyk CLI
+        run: |
+          npm install -g snyk
+
+      - name: Run snyk test (skip if token not set)
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [ -z "$SNYK_TOKEN" ]; then
+            echo "SNYK_TOKEN not set. Skipping snyk test in CI."
+            exit 0
+          fi
+          snyk test

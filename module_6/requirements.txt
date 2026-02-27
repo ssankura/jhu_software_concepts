@@ -1,0 +1,28 @@
+# -----------------------------
+# Runtime dependencies
+# -----------------------------
+Flask>=3.0,<4
+psycopg[binary]>=3.2,<4
+beautifulsoup4>=4.12,<5
+
+# -----------------------------
+# Testing
+# -----------------------------
+pytest>=8.0,<9
+pytest-cov>=5.0,<6
+
+# -----------------------------
+# Linting & Static Analysis
+# -----------------------------
+pylint>=3.0,<4
+
+# -----------------------------
+# Dependency Graph
+# -----------------------------
+pydeps>=3.0,<4
+graphviz>=0.20,<1
+
+# -----------------------------
+# Security Scanning (Snyk)
+# -----------------------------
+# Snyk CLI is installed separately (npm/brew), not via pip.

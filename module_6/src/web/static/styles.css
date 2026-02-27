@@ -1,0 +1,387 @@
+/* ==========================================================================
+   Global Page Styling
+   --------------------------------------------------------------------------
+   Base reset + typography + neutral background for analytics dashboard.
+   Uses system font stack for native look across macOS/Windows/Linux.
+========================================================================== */
+
+body {
+    margin: 0; /* Remove default browser margin */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background-color: #f5f7fb; /* Soft neutral background */
+    color: #111; /* High contrast text for readability */
+}
+
+
+/* ==========================================================================
+   Container Layout
+   --------------------------------------------------------------------------
+   Constrains content width and centers dashboard.
+   Prevents content stretching too wide on large monitors.
+========================================================================== */
+
+.container {
+    max-width: 1100px;
+    margin: 30px auto; /* Center horizontally */
+    padding: 0 20px;   /* Horizontal breathing space */
+}
+
+
+/* ==========================================================================
+   Header Styling
+   --------------------------------------------------------------------------
+   Header split into left (title) and right (action buttons).
+   Flexbox ensures clean horizontal alignment.
+========================================================================== */
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
+
+h1 {
+    margin: 0;
+    font-size: 28px;
+}
+
+.subtitle {
+    margin-top: 6px;
+    color: #666; /* Subtle secondary text */
+}
+
+
+/* ==========================================================================
+   Header Layout Refinement
+   --------------------------------------------------------------------------
+   Prevents title wrapping into a narrow column and keeps buttons aligned.
+========================================================================== */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.header-left h1 {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.1;
+}
+
+/* Prevent title wrapping vertically */
+.header-left {
+  flex: 1;
+  min-width: 520px;
+}
+
+.header-right {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0; /* Prevent button compression */
+}
+
+
+/* Responsive: stack header vertically on smaller screens */
+@media (max-width: 900px) {
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .header-left {
+    min-width: auto;
+  }
+  .header-right {
+    justify-content: flex-start;
+  }
+}
+
+
+/* ==========================================================================
+   Buttons
+   --------------------------------------------------------------------------
+   Clean, rounded dashboard buttons with disabled state support.
+   Disabled state used when busy (pull in progress).
+========================================================================== */
+
+.btn {
+    border: none;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-secondary {
+    background-color: #e7ebf5;
+    color: #333;
+}
+
+.btn-secondary:hover {
+    background-color: #d8def0;
+}
+
+.btn:disabled {
+    opacity: 0.6;         /* Visual busy indicator */
+    cursor: not-allowed;  /* Prevent interaction */
+}
+
+
+/* ==========================================================================
+   Card Sections
+   --------------------------------------------------------------------------
+   Cards visually group analytics results.
+   Subtle shadow gives dashboard-style elevation.
+========================================================================== */
+
+.card {
+    background-color: white;
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+}
+
+.card h2 {
+    margin-top: 0;
+}
+
+
+/* ==========================================================================
+   Grid Layout for Metrics
+   --------------------------------------------------------------------------
+   Responsive 3-column grid for metric tiles.
+   Collapses to 2-column and 1-column at smaller widths.
+========================================================================== */
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+}
+
+
+/* ==========================================================================
+   Metric Boxes
+   --------------------------------------------------------------------------
+   Individual statistic boxes within grid layout.
+========================================================================== */
+
+.metric {
+    border: 1px solid #eee;
+    border-radius: 12px;
+    padding: 14px;
+    background-color: #fafafa;
+}
+
+.metric-title {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 6px;
+}
+
+.metric-value {
+    font-size: 22px;
+    font-weight: bold;
+}
+
+
+/* ==========================================================================
+   Tables
+   --------------------------------------------------------------------------
+   Used for top programs and ranked lists.
+   Clean, minimal table styling for readability.
+========================================================================== */
+
+.table-title {
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    border-radius: 10px;
+    overflow: hidden; /* Ensures rounded corners clip */
+}
+
+th {
+    background-color: #f1f3f9;
+    padding: 12px;
+    text-align: left;
+    font-size: 14px;
+}
+
+td {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+}
+
+
+/* ==========================================================================
+   Footer
+   --------------------------------------------------------------------------
+   Small informational footer at bottom of dashboard.
+========================================================================== */
+
+.footer {
+    text-align: center;
+    font-size: 12px;
+    color: #777;
+    margin-top: 20px;
+}
+
+
+/* ==========================================================================
+   Responsive Grid Adjustments
+========================================================================== */
+
+@media (max-width: 900px) {
+    .grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
+    .header {
+        flex-direction: column;
+        gap: 10px;
+    }
+}
+
+
+/* ==========================================================================
+   Q/A Layout (Assignment Screenshot Format)
+   --------------------------------------------------------------------------
+   Structured presentation of questions and answers.
+   Ensures "Answer:" labels are visually distinct.
+========================================================================== */
+
+.qa-page {
+    margin-top: 10px;
+}
+
+.qa-card {
+    background-color: #f2f2f2;
+    border: 1px solid #e6e6e6;
+    border-radius: 6px;
+    padding: 16px 18px;
+    margin: 14px 0;
+}
+
+.qa-question {
+    font-weight: 700;
+    margin-bottom: 10px;
+    line-height: 1.35;
+}
+
+.qa-answer {
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.qa-answer-label {
+    font-weight: 700; /* Highlights "Answer:" label */
+}
+
+
+/* ==========================================================================
+   Status Row (Busy / Ready Indicator)
+   --------------------------------------------------------------------------
+   Visual indicator used when pull is running.
+========================================================================== */
+
+.status-row {
+  margin: 10px 0 20px;
+}
+
+.status {
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  border: 1px solid #eee;
+  background: #fff;
+}
+
+.status-warning {
+  background: #fff7e6;
+  border-color: #ffe2a8;
+}
+
+.status-ok {
+  background: #eefbf0;
+  border-color: #bfe8c8;
+}
+
+
+/* Generic button fallback styling */
+button {
+    padding: 8px 14px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+button:disabled {
+    cursor: not-allowed;
+}
+
+
+/* ==========================================================================
+   Tooltip Styling
+   --------------------------------------------------------------------------
+   Pure CSS tooltip used for UI hints (no JavaScript required).
+   Appears on hover.
+========================================================================== */
+
+.tooltip {
+  position: relative;
+}
+
+/* Tooltip body */
+.tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 10px);
+  transform: translateX(-50%);
+  width: 260px;
+  background: rgba(17, 17, 17, 0.92);
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.3;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 999;
+}
+
+/* Tooltip arrow */
+.tooltip::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 4px);
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-bottom-color: rgba(17, 17, 17, 0.92);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 999;
+}
+
+/* Show tooltip on hover */
+.tooltip:hover::after,
+.tooltip:hover::before {
+  opacity: 1;
+}

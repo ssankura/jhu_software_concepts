@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pull_data.lock
+.coverage
+.pytest_cache/
+*.log
+.env
+docs/build/
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/.env
+.env
