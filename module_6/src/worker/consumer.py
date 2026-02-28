@@ -1,3 +1,14 @@
+"""
+RabbitMQ worker consumer for Module 6 background tasks.
+
+This module:
+- connects to RabbitMQ and consumes durable tasks from tasks_q
+- routes tasks by message kind
+- runs each task in a DB transaction
+- acks only after successful commit
+- nacks (no requeue) on failures to avoid infinite retry loops
+"""
+
 from __future__ import annotations
 
 import importlib
@@ -25,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 def _require_env(name: str) -> str:
+    """Return required environment value or raise if missing."""
     value = os.environ.get(name)
     if not value:
         raise RuntimeError(f"Missing required env var: {name}")
@@ -32,10 +44,21 @@ def _require_env(name: str) -> str:
 
 
 def _open_rabbit():
+    """
+    Open RabbitMQ connection/channel and declare durable topology.
+
+    Topology:
+    - direct exchange: tasks
+    - durable queue: tasks_q
+    - binding key: tasks
+
+    Also sets prefetch_count=1 for backpressure (process one message at a time).
+    """
     url = _require_env("RABBITMQ_URL")
     conn = pika.BlockingConnection(pika.URLParameters(url))
     ch = conn.channel()
 
+    # Idempotent declarations: safe to run on every startup.
     ch.exchange_declare(exchange=EXCHANGE, exchange_type="direct", durable=True)
     ch.queue_declare(queue=QUEUE, durable=True)
     ch.queue_bind(exchange=EXCHANGE, queue=QUEUE, routing_key=ROUTING_KEY)
@@ -45,11 +68,13 @@ def _open_rabbit():
 
 
 def _open_db():
+    """Open a new PostgreSQL connection using DATABASE_URL."""
     db_url = _require_env("DATABASE_URL")
     return psycopg.connect(db_url)
 
 
 def _safe_float(value: Any) -> float | None:
+    """Convert numeric-like values to float; return None for invalid/empty values."""
     if value in (None, "", "null"):
         return None
     try:
@@ -59,6 +84,9 @@ def _safe_float(value: Any) -> float | None:
 
 
 def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
+    """
+    Normalize scraper row into DB insert shape expected by applicants schema.
+    """
     return {
         "program": row.get("program"),
         "comments": row.get("comments"),
@@ -78,11 +106,14 @@ def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _row_sort_key(row: dict[str, Any]) -> str:
-    # Text key is fine with TEXT watermark; prefer date_added, fallback url.
+    # Watermark uses text; prefer date_added and fallback to url for stability.
     return str(row.get("date_added") or row.get("url") or "")
 
 
 def _fallback_rows_from_json() -> list[dict[str, Any]]:
+    """
+    Read local fallback dataset when incremental scraper hook is unavailable.
+    """
     data_path = Path("/data/applicant_data.json")
     if not data_path.exists():
         logger.warning("No /data/applicant_data.json found; returning empty batch.")
@@ -96,7 +127,15 @@ def _fallback_rows_from_json() -> list[dict[str, Any]]:
 
 def _fetch_incremental_rows(since: str | None) -> list[dict[str, Any]]:
     """
-    Try existing scraper hooks first; if not available, fallback to /data JSON.
+    Fetch rows from existing incremental scraper functions if available.
+
+    Supported hook names in etl.incremental_scraper:
+    - fetch_new_rows
+    - scrape_new_data
+    - run_incremental
+    - get_new_rows
+
+    Falls back to /data/applicant_data.json if hooks are unavailable/fail.
     """
     try:
         mod = importlib.import_module("etl.incremental_scraper")
@@ -106,6 +145,7 @@ def _fetch_incremental_rows(since: str | None) -> list[dict[str, Any]]:
                 try:
                     rows = fn(since=since)
                 except TypeError:
+                    # Backward compatibility for hook signatures without "since".
                     rows = fn()
                 if isinstance(rows, list):
                     return [r for r in rows if isinstance(r, dict)]
@@ -124,6 +164,7 @@ def _fetch_incremental_rows(since: str | None) -> list[dict[str, Any]]:
 
 
 def _get_watermark(conn: psycopg.Connection, source: str) -> str | None:
+    """Read last_seen watermark for a source."""
     with conn.cursor() as cur:
         cur.execute(
             "SELECT last_seen FROM ingestion_watermarks WHERE source = %s LIMIT 1;",
@@ -134,6 +175,7 @@ def _get_watermark(conn: psycopg.Connection, source: str) -> str | None:
 
 
 def _set_watermark(conn: psycopg.Connection, source: str, last_seen: str) -> None:
+    """Upsert watermark after successful insert batch."""
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -147,6 +189,13 @@ def _set_watermark(conn: psycopg.Connection, source: str, last_seen: str) -> Non
 
 
 def handle_scrape_new_data(conn: psycopg.Connection, payload: dict[str, Any]) -> None:
+    """
+    Process scrape_new_data task:
+    - determine watermark source/since
+    - fetch incremental rows
+    - normalize and idempotently insert into applicants
+    - advance watermark to max seen value
+    """
     source = str(payload.get("source") or DEFAULT_SOURCE)
     since = payload.get("since") or _get_watermark(conn, source)
 
@@ -165,8 +214,9 @@ def handle_scrape_new_data(conn: psycopg.Connection, payload: dict[str, Any]) ->
                 program, comments, date_added, url, status, term, us_or_international,
                 gpa, gre, gre_v, gre_aw, degree, llm_generated_program, llm_generated_university
             ) VALUES (
-                %(program)s, %(comments)s, %(date_added)s, %(url)s, %(status)s, %(term)s, %(us_or_international)s,
-                %(gpa)s, %(gre)s, %(gre_v)s, %(gre_aw)s, %(degree)s, %(llm_generated_program)s, %(llm_generated_university)s
+                %(program)s, %(comments)s, %(date_added)s, %(url)s, %(status)s, %(term)s,
+                %(us_or_international)s, %(gpa)s, %(gre)s, %(gre_v)s, %(gre_aw)s, %(degree)s,
+                %(llm_generated_program)s, %(llm_generated_university)s
             )
             ON CONFLICT (url) DO NOTHING;
             """,
@@ -177,18 +227,29 @@ def handle_scrape_new_data(conn: psycopg.Connection, payload: dict[str, Any]) ->
     if max_seen:
         _set_watermark(conn, source, max_seen)
 
-    logger.info("Scrape task processed: rows=%s source=%s watermark=%s", len(rows), source, max_seen)
+    logger.info(
+        "Scrape task processed: rows=%s source=%s watermark=%s",
+        len(rows),
+        source,
+        max_seen,
+    )
 
 
 def handle_recompute_analytics(conn: psycopg.Connection, payload: dict[str, Any]) -> None:
+    """
+    Process recompute_analytics task.
+
+    Placeholder query keeps behavior deterministic for now.
+    Replace with REFRESH MATERIALIZED VIEW or summary recompute as needed.
+    """
     _ = payload
-    # If you add materialized views, refresh them here.
     with conn.cursor() as cur:
         cur.execute("SELECT 1;")
     logger.info("Recompute analytics task processed")
 
 
 def _route_message(kind: str, conn: psycopg.Connection, payload: dict[str, Any]) -> None:
+    """Dispatch task payload to the appropriate handler by kind."""
     task_map = {
         "scrape_new_data": handle_scrape_new_data,
         "recompute_analytics": handle_recompute_analytics,
@@ -198,7 +259,20 @@ def _route_message(kind: str, conn: psycopg.Connection, payload: dict[str, Any])
     task_map[kind](conn, payload)
 
 
-def _on_message(ch: BlockingChannel, method: Basic.Deliver, properties: BasicProperties, body: bytes):
+# pylint: disable=no-member
+def _on_message(
+    ch: BlockingChannel,
+    method: Basic.Deliver,
+    properties: BasicProperties,
+    body: bytes,
+):
+    """
+    RabbitMQ callback:
+    - parse/validate JSON message
+    - route and execute inside DB transaction
+    - ack only after commit
+    - nack without requeue on any error
+    """
     _ = properties
     try:
         msg = json.loads(body.decode("utf-8"))
@@ -225,6 +299,7 @@ def _on_message(ch: BlockingChannel, method: Basic.Deliver, properties: BasicPro
 
 
 def main():
+    """Start long-running consumer loop."""
     conn, ch = _open_rabbit()
     logger.info("Worker consuming queue=%s", QUEUE)
     ch.basic_consume(queue=QUEUE, on_message_callback=_on_message, auto_ack=False)

@@ -37,8 +37,6 @@ from typing import Any, Dict, List, Optional
 import psycopg
 
 
-
-
 # --- Path setup: allow running as script without installing the package ---
 ROOT = Path(__file__).resolve().parents[1]  # points to src/
 sys.path.insert(0, str(ROOT))

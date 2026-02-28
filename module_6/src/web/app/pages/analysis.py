@@ -7,12 +7,13 @@ A shared busy-state in pull_state prevents pull/update operations from running a
 Helper functions keep formatting consistent (for example, percentages with two decimals).
 """
 import os
-
 from decimal import Decimal
+
 from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
+from publisher import publish_task
+
 from app.pages import pages_bp
 from app.pages.pull_state import is_running
-from publisher import publish_task
 
 
 
@@ -290,29 +291,45 @@ def analysis():
     )
 
 
+# pylint: disable=too-many-return-statements
 @pages_bp.post("/pull-data", endpoint="pull_data_route")
 def pull_data():
+    """
+    Handle Pull Data action for both queue mode and local test mode.
+
+    Behavior:
+    - If busy lock is active, return 409.
+    - If RABBITMQ_URL exists, enqueue `scrape_new_data` and return immediately.
+    - Otherwise, use injected synchronous pull function (test/backward compatibility).
+    """
     if is_running():
         return jsonify({"busy": True}), 409
 
-    # Use queue path only when broker is configured (Docker runtime).
+    # Queue mode (Docker/runtime): publish task and return without blocking.
     if os.getenv("RABBITMQ_URL"):
         try:
             publish_task("scrape_new_data", payload={})
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            wants_html = request.accept_mimetypes.accept_html and not request.accept_mimetypes.accept_json
+            wants_html = (
+                request.accept_mimetypes.accept_html
+                and not request.accept_mimetypes.accept_json
+            )
+
             if wants_html:
                 flash("Pull Data queue unavailable. Please retry.", "warning")
                 return redirect(url_for("pages.analysis"))
             return jsonify({"ok": False, "error": str(exc)}), 503
 
-        wants_html = request.accept_mimetypes.accept_html and not request.accept_mimetypes.accept_json
+        wants_html = (
+            request.accept_mimetypes.accept_html
+            and not request.accept_mimetypes.accept_json
+        )
         if wants_html:
             flash("Pull Data request queued.", "success")
             return redirect(url_for("pages.analysis"))
         return jsonify({"ok": True, "queued": True, "kind": "scrape_new_data"}), 202
 
-    # Backward-compatible test/local path.
+    # Local/test fallback path: run injected sync function.
     deps = current_app.extensions.get("deps", {})
     pull_data_fn = deps["pull_data_fn"]
     try:
@@ -322,7 +339,10 @@ def pull_data():
     except Exception as exc:  # pylint: disable=broad-exception-caught
         result = {"ok": False, "error": str(exc)}
 
-    wants_html = request.accept_mimetypes.accept_html and not request.accept_mimetypes.accept_json
+    wants_html = (
+        request.accept_mimetypes.accept_html
+        and not request.accept_mimetypes.accept_json
+    )
     if wants_html:
         if result.get("ok"):
             flash(f"Pull Data completed. Inserted: {result.get('inserted', 0)}", "success")
@@ -336,27 +356,41 @@ def pull_data():
 
 @pages_bp.post("/update-analysis")
 def update_analysis():
+    """
+    Handle Update Analysis action for both queue mode and local test mode.
+
+    Behavior:
+    - If busy lock is active, return 409.
+    - If RABBITMQ_URL exists, enqueue `recompute_analytics`.
+    - Otherwise, call injected synchronous update function.
+    """
     if is_running():
         return jsonify({"busy": True}), 409
 
-    # Use queue path only when broker is configured (Docker runtime).
+    # Queue mode (Docker/runtime): enqueue recompute task.
     if os.getenv("RABBITMQ_URL"):
         try:
             publish_task("recompute_analytics", payload={})
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            wants_html = request.accept_mimetypes.accept_html and not request.accept_mimetypes.accept_json
+            wants_html = (
+                request.accept_mimetypes.accept_html
+                and not request.accept_mimetypes.accept_json
+            )
             if wants_html:
                 flash("Update Analysis queue unavailable. Please retry.", "warning")
                 return redirect(url_for("pages.analysis"))
             return jsonify({"ok": False, "error": str(exc)}), 503
 
-        wants_html = request.accept_mimetypes.accept_html and not request.accept_mimetypes.accept_json
+        wants_html = (
+            request.accept_mimetypes.accept_html
+            and not request.accept_mimetypes.accept_json
+        )
         if wants_html:
             flash("Update Analysis request queued.", "success")
             return redirect(url_for("pages.analysis"))
         return jsonify({"ok": True, "queued": True, "kind": "recompute_analytics"}), 202
 
-    # Backward-compatible test/local path.
+    # Local/test fallback path.
     deps = current_app.extensions.get("deps", {})
     update_analysis_fn = deps.get("update_analysis_fn", lambda: None)
     update_analysis_fn()
