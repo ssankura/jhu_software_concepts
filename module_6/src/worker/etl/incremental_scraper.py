@@ -228,5 +228,5 @@ def main() -> int:
 
 # Standard CLI execution guard.
 # Raises SystemExit so exit codes propagate correctly.
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
