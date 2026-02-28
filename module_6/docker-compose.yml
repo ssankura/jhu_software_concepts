@@ -5,6 +5,8 @@ services:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app
       POSTGRES_DB: appdb
+    ports:
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./src/db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
@@ -23,10 +25,10 @@ services:
     environment:
       DATABASE_URL: postgresql://app:app@db:5432/appdb
     depends_on:
-      - db
-    command: [ "python", "/db/load_data.py", "--file", "/data/applicant_data.json" ]
+      db:
+        condition: service_healthy
+    command: ["python", "/db/load_data.py", "--file", "/data/applicant_data.json"]
     restart: "no"
-
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -54,6 +56,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      db_init:
+        condition: service_completed_successfully
 
   worker:
     build: ./src/worker
@@ -67,6 +71,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      db_init:
+        condition: service_completed_successfully
 
 volumes:
   pgdata:

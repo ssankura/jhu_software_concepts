@@ -471,7 +471,7 @@ def main() -> None:
     load_data(args.file, batch_size=args.batch_size)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()
 
 # Standard Python
