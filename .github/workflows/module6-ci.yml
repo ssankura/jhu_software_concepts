@@ -72,6 +72,14 @@ jobs:
           pip install -r src/web/requirements.txt -r src/worker/requirements.txt
           pip install -e .
 
+      - name: Debug data path
+        run: |
+          pwd
+          ls -la
+          ls -la src
+          ls -la src/data || true
+          test -f src/data/applicant_data.json
+
       - name: Initialize schema and seed data
         run: |
           python src/db/load_data.py --file src/data/applicant_data.json
