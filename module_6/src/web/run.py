@@ -26,7 +26,7 @@ Notes:
   instead of running Flask’s built-in server.
 """
 
-from web.app import create_app
+from app import create_app
 
 
 # ============================================================================
@@ -58,5 +58,4 @@ if __name__ == "__main__":
     # - Enables automatic reload on file changes
     # - Provides interactive debugger on errors
     # - Should be set to False in production environments
-    app = create_app()
-    app.run(host="127.0.0.1", port=8080, debug=False)
+    app.run(host="0.0.0.0", port=8080, debug=False)

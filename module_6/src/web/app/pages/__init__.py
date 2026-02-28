@@ -17,4 +17,4 @@ pages_bp = Blueprint(
 )
 
 # Import route modules so Flask registers them with the Blueprint
-from . import analysis  # pylint: disable=wrong-import-position  # noqa: F401
+from app.pages import analysis  # pylint: disable=wrong-import-position  # noqa: F401

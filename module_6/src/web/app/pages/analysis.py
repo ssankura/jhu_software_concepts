@@ -11,9 +11,8 @@ from decimal import Decimal
 
 from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
 
-from . import pages_bp
-from .pull_state import is_running, start, stop
-
+from app.pages import pages_bp
+from app.pages.pull_state import is_running, start, stop
 
 
 
