@@ -25,6 +25,7 @@ Notes:
 - In production, a WSGI server (e.g., gunicorn) would import `app`
   instead of running Flask’s built-in server.
 """
+import os
 
 from app import create_app
 
@@ -59,4 +60,10 @@ if __name__ == "__main__":
     # - Provides interactive debugger on errors
     # - Should be set to False in production environments
 
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(
+        host=os.getenv("FLASK_HOST", "127.0.0.1"),
+        port=int(os.getenv("PORT", "5000")),
+        debug=os.getenv("FLASK_DEBUG", "true").lower() == "true",
+    )
+
+
